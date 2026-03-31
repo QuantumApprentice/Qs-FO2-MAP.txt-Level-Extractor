@@ -8,6 +8,8 @@ target_sources(
     ${EXE_NAME} PRIVATE
     src/main.cpp
     src/map_txt_parser.cpp
+    src/map_txt_gui.cpp
+    dependencies/IO_Platform/io_Platform.cpp
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -47,7 +49,7 @@ target_include_directories(
     dependencies/glfw-3.4/include/
     dependencies/imgui-1.92.7/
     dependencies/imgui-1.92.7/backends/
-    dependencies/IO_Platform
+    dependencies/IO_Platform/
 )
 
 target_link_libraries(

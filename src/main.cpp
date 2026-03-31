@@ -6,6 +6,8 @@
 // - Getting Started      https://dearimgui.com/getting-started
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
 // - Introduction, links and more at the top of imgui.cpp
+bool show_demo_window = false;
+bool show_another_window = false;
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -32,6 +34,35 @@
 
 /* beginning of non-default stuff */
 #include <io_Platform.h>
+#include "map_txt_parser.h"
+#include "map_txt_gui.h"
+
+#include <stdlib.h>
+char* filename = NULL;
+bool file_drop_frame = false;
+void file_drop_callback(GLFWwindow *window, int count, const char** files)
+{
+    size_t size = 0;
+    for (int i = 0; i < count; i++) {
+        size += strlen(files[i]) + 1;
+    }
+    if (filename) {
+        free(filename);
+        filename = NULL;
+    }
+    filename = (char*)malloc(size);
+
+    int len = strlen(files[0]) + 1;
+    memcpy(filename, files[0], len);
+
+    file_drop_frame = true;
+}
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, true);
+    }
+}
 void init_glad()
 {
     if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
@@ -44,25 +75,6 @@ void init_glad()
         printf("Renderer: %s\n",     glGetString(GL_RENDERER));
         printf("Version: %s\n",      glGetString(GL_VERSION));
         printf("GLSL Version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
-    }
-}
-void file_drop_callback(GLFWwindow *window, int count, const char** files)
-{
-    size_t size = 0;
-    for (int i = 0; i < count; i++) {
-        size += strlen(files[i]) + 1;
-    }
-    // filename = (char*)malloc(size);
-
-    int len = strlen(files[0]) + 1;
-    // memcpy(video_buffer.filename, files[0], len);
-
-    // video_buffer.file_drop_frame = true;
-}
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, true);
     }
 }
 /* end of non-default stuff */
@@ -134,9 +146,10 @@ int main(int, char**)
     //ImGui::StyleColorsLight();
 
     // Setup scaling
+    // ImVec2 display_size = ImGui::GetIO().DisplaySize;
     ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-    style.FontScaleDpi = main_scale;        // Set initial font scale. (in docking branch: using io.ConfigDpiScaleFonts=true automatically overrides this for every window depending on the current monitor)
+    style.ScaleAllSizes(main_scale*2);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+    style.FontScaleDpi = main_scale*2.5;        // Set initial font scale. (in docking branch: using io.ConfigDpiScaleFonts=true automatically overrides this for every window depending on the current monitor)
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -165,8 +178,7 @@ int main(int, char**)
     //IM_ASSERT(font != nullptr);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
+
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -202,25 +214,25 @@ int main(int, char**)
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
-            static float f = 0.0f;
-            static int counter = 0;
+            static uint8_t* file_ptr = NULL;
+            ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+            ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+            ImGui::Begin("map.txt editor - ");
+            if (ImGui::Button("Demo Window")) {
+                show_demo_window = !show_demo_window;
+            }
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+            file_drop_frame = map_txt_gui();
 
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
+            if (file_drop_frame) {
+                file_ptr = io_load_file(filename);
+            }
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
 
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
+
+
         }
 
         // 3. Show another simple window.
