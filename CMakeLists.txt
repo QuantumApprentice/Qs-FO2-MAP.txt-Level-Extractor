@@ -44,6 +44,17 @@ add_subdirectory(
     dependencies/glad1/                 SYSTEM
 )
 
+
+find_package(X11 REQUIRED)
+target_include_directories(
+    QMAP_txt_editor PRIVATE
+    ${X11_INCLUDE_DIR}
+)
+target_link_libraries(
+    QMAP_txt_editor PRIVATE
+    glfw ${X11_LIBRARIES}
+)
+
 target_include_directories(
     ImGui PUBLIC
     dependencies/glfw-3.4/include/
@@ -57,5 +68,6 @@ target_link_libraries(
     ImGui
     glad
     glfw
+    X11::X11
 )
 

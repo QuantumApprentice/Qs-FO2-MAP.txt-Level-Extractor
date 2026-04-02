@@ -122,7 +122,7 @@ int main(int, char**)
 
     // Create window with graphics context
     float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow((int)(640 * main_scale), (int)(480 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
     if (window == nullptr)
         return 1;
     glfwMakeContextCurrent(window);
@@ -177,6 +177,9 @@ int main(int, char**)
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
     //IM_ASSERT(font != nullptr);
 
+    io_x11_init(window);
+
+
     // Our state
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -222,11 +225,37 @@ int main(int, char**)
                 show_demo_window = !show_demo_window;
             }
 
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+
+
+
+
+
+
+
+
+            // glfwWindowHint(GLFW_FOCUSED, true);
+            // glfwPollEvents()
+            // ImGui_ImplGlfw_ContextMap_Get(window);
+            // ImGui_ImplGlfw_Data* bd = ImGui_ImplGlfw_GetBackendData(window);
             file_drop_frame = map_txt_gui();
 
-            if (file_drop_frame) {
-                file_ptr = io_load_file(filename);
-            }
+            // if (file_drop_frame) {
+            //     file_ptr = io_load_file(filename);
+            // }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
