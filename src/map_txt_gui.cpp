@@ -1,32 +1,130 @@
-#include <imgui.h>
 #include <imgui_internal.h>
-#include <GLFW/glfw3.h>
 #include "map_txt_gui.h"
+#include "io_Platform.h"
 
 
+bool is_hovering   = false;
+int  map_box       = -1;
+char*   name_left  = NULL;
+uint8_t* map_left  = NULL;
+char*   name_right = NULL;
+uint8_t* map_right = NULL;
 
 
-bool drag_drop();
+#define NAME_LENGTH         (16)
+static char hl[NAME_LENGTH] = {"empty##1"};
+static char hm[NAME_LENGTH] = {"empty##2"};
+static char hr[NAME_LENGTH] = {"empty##3"};
+void file_drop_callback(const char* full_path)
+{
+    if (map_box == -1) {
+        return;
+    }
+
+    uint8_t* file_box = NULL;
+    char* file_name   = NULL;
+    int len = strlen(full_path) + 1;
+    file_name = (char*)malloc(len);
+    memcpy(file_name, full_path, len);
+
+    char* start = strrchr(file_name,'/')+1;
+
+    if (map_box == 0) {
+        file_box  = map_left;
+        if (name_left) {
+            free(name_left);
+            name_left = NULL;
+        }
+        name_left = file_name;
+        strncpy(hl,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    } else
+    if (map_box == 1) {
+        file_box   = map_right;
+        if (name_right) {
+            free(name_right);
+            name_right = NULL;
+        }
+        name_right = file_name;
+        strncpy(hr,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    }
+
+    if (file_box) {
+        free(file_box);
+        file_box = NULL;
+    }
+
+    file_box = io_load_file(file_name);
+
+    map_box = -1;
+}
+
+void drag_file(ImVec2 pos)
+{
+    ImGui::TeleportMousePos(pos);
+    ImGuiIO& io = ImGui::GetIO();
+    io.MouseDown[0] = true;
+
+    is_hovering = true;
+}
+void drag_dropped()
+{
+    is_hovering = false;
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.MouseDown[0] = false;
+    // map_box = -1;
+}
+
+// kind of dumb, but...
+// if mouse enters the boundaries of the previous item
+// (in this case it's always one of the two map lists)
+// then draw highlight border around the list
+// and return true
+// the return value is used to determine which list item
+// to use when storing the map.txt information
+bool drag_imgui()
+{
+    if (is_hovering) {
+        ImVec2 list_min  = ImGui::GetItemRectMin();
+        ImVec2 list_max  = ImGui::GetItemRectMax();
+        ImRect rect = ImRect{list_min.x,list_min.y,list_max.x,list_max.y};
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRect(list_min, list_max, ImColor(232,232,2,255), 0, 0, 5.0f);
+
+        ImVec2 m_pos = ImGui::GetMousePos();
+        if ((m_pos.x > list_min.x)
+        &&  (m_pos.y > list_min.y)
+        &&  (m_pos.x < list_max.x)
+        &&  (m_pos.y < list_max.y)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 bool map_txt_gui()
 {
     ImVec2 size = ImGui::CalcTextSize("AAAAAAAAA");
     ImGui::PushItemWidth(size.x);
-    const char* map_L[] = { "Level 1", "Level 2", "Level 3" };
-    const char* map_M[] = { "empty",   "empty",   "empty"   };
-    const char* map_R[] = { "Level 1", "Level 2", "Level 3" };
+    static const char* map_L[] = { "Left 1", "Left 2", "Left 3" };
+    static const char* map_M[] = { "empty",   "empty",   "empty"   };
+    static const char* map_R[] = { "Right 1", "Right 2", "Right 3" };
 
-    ImGui::Text("Lists:");
+    ImGui::Text("Map Names:");
 
 
     ImVec2 posA = ImGui::GetCursorPos();
 
-    static char hl[10] = {"empty##1"};
-    static char hm[10] = {"empty##2"};
-    static char hr[10] = {"empty##3"};
-
+    char* start = NULL;
     if (ImGui::Button(hl, ImVec2{size.x,0})) {
-        strncpy(hm,"Header1##",sizeof("Header1##"));
+        if (name_left) {
+            start = strrchr(name_left,'/')+1;
+            snprintf(hm, strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH, "%s##", start);
+            // strncpy(hm,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+        } else {
+            strncpy(hm,"Header1##",sizeof("Header1##"));
+        }
     }
     ImGui::SetCursorPos(ImVec2{posA.x+size.x   + 40, posA.y});
     if (ImGui::Button(hm, ImVec2{size.x,0})) {
@@ -34,10 +132,14 @@ bool map_txt_gui()
     }
     ImGui::SetCursorPos(ImVec2{posA.x+size.x*2 + 80, posA.y});
     if (ImGui::Button(hr, ImVec2{size.x,0})) {
-        strncpy(hm,"Header2##",sizeof("Header2##"));
+        if (name_right) {
+            start = strrchr(name_right,'/')+1;
+            snprintf(hm, strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH, "%s##", start);
+            // strncpy(hm,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+        } else {
+            strncpy(hm,"Header2##",sizeof("Header2##"));
+        }
     }
-    ImGui::SameLine();
-    ImGui::Text("Map Header");
 
 
     ImVec2 posB = ImGui::GetCursorPos();
@@ -45,33 +147,14 @@ bool map_txt_gui()
 
 
 
-
-
-
-
-
-
     ImGui::ListBox("##L", &selection[0], map_L, IM_COUNTOF(map_L));
-    drag_drop();
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if (drag_imgui()) {
+        map_box = 0;
+    }
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x   +  5, posB.y});
     if (ImGui::Button(">##L->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
-        //move from left to middle
+        //QTODO: move from left to middle
     }
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x   + 40, posB.y});
@@ -79,110 +162,18 @@ bool map_txt_gui()
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 45, posB.y});
     if (ImGui::Button("<##R->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
-        //move from right to middle
+        //QTODO: move from right to middle
     }
+
+
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 80, posB.y});
     ImGui::ListBox("##R", &selection[2], map_R, IM_COUNTOF(map_R));
+    if (drag_imgui()) {
+        map_box = 1;
+    }
 
     ImGui::PopItemWidth();
-
-
-
-
-    return false;
-}
-
-
-bool drag_drop()
-{
-
-    ImVec2 list_min  = ImGui::GetItemRectMin();
-    ImVec2 list_max  = ImGui::GetItemRectMax();
-    ImRect rect = ImRect{list_min.x,list_min.y,list_max.x,list_max.y};
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGuiWindow* window = ImGui::GetCurrentWindow();
-
-
-
-
-
-
-    bool drag_frame = false;// = io_file_drag();
-
-
-    // if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
-    //     if (ImGui::GetDragDropPayload()) {
-    //         ImGui::Text("11111");
-    //     }
-    //     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern | ImGuiDragDropFlags_AcceptBeforeDelivery))	// we use an external source (i.e. not ImGui-created)
-    //     {
-    //         // replace "FILES" with whatever identifier you want - possibly dependant upon what type of files are being dragged
-    //         // you can specify a payload here with parameter 2 and the sizeof(parameter) for parameter 3.
-    //         // I store the payload within a vector of strings within the application itself so don't need it.
-    //         // ImGui::SetDragDropPayload("FILES", nullptr, 0);
-    //         // // const ImGuiPayload* pl = ImGui::GetDragDropPayload();
-    //         // const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(
-    //         //     IMGUI_PAYLOAD_TYPE_EXTERNAL_FILE,
-    //         //     ImGuiDragDropFlags_AcceptPeekOnly
-    //         // );
-    //         // if (pl) {
-    //         //     flip = true;
-    //         // }
-    //         // ImGui::BeginTooltip();
-    //         // ImGui::EndTooltip();
-    //         ImGui::EndDragDropSource();
-    //     }
-    //     // if (ImGui::BeginDragDropTargetCustom(rect,viewport->ID)) {
-    //     //     if (ImGui::GetDragDropPayload()) {
-    //     //         printf("test");
-    //     //     }
-    //     //     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(IMGUI_PAYLOAD_TYPE_COLOR_3F))
-    //     //     {
-    //     //         printf("custom");
-    //     //     }
-    //     // }
-    //     // if (ImGui::BeginDragDropTargetViewport(viewport, &rect))
-    //     // {
-    //     //     if (ImGui::GetDragDropPayload()) {
-    //     //         ImGui::Text("xxxxx");
-    //     //     }
-    //     //     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("FILES"))
-    //     //     {
-    //     //         // ImGui::Text("ooooo");
-    //     //         // flip = true;
-    //     //     }
-    //     //     ImGui::EndDragDropTarget();
-    //     // }
-    // }
-
-
-    if (drag_frame) {
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern))
-        {
-            ImGui::SetDragDropPayload("FILES", nullptr, 0);
-        }
-        ImGui::EndDragDropSource();
-    }
-
-    // if (ImGui::BeginDragDropTargetCustom(rect,viewport->ID))
-    if (ImGui::BeginDragDropTarget())
-    {
-
-        if (ImGui::AcceptDragDropPayload("FILES"))
-        {
-            // flip = true;
-        }
-        ImGui::EndDragDropTarget();
-    }
-
-
-
-
-
-
-
-
 
 
     return false;

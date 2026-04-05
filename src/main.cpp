@@ -27,34 +27,18 @@ bool show_another_window = false;
 
 #include <stdlib.h>
 #include <io_Platform.h>
+#include <imgui_internal.h>
 #include "map_txt_parser.h"
 #include "map_txt_gui.h"
 char* filename = NULL;
 bool file_drop_frame = false;
 bool file_drag_frame = false;
-void file_drop_callback_SDL(SDL_Event event)
+void file_drop_callback_SDL3(SDL_Event event)
 {
     //SDL3 version
     //apparently SDL only drops one file at a time?
     const char* file = event.drop.data;
-
-    // size_t size = 0;
-    // for (int i = 0; i < count; i++) {
-    //     size += strlen(files[i]) + 1;
-    // }
-    if (filename) {
-        free(filename);
-        filename = NULL;
-    }
-    // filename = (char*)malloc(size);
-
-    // int len = strlen(files[0]) + 1;
-    // memcpy(filename, files[0], len);
-
-    int len = strlen(file) + 1;
-    filename = (char*)malloc(len);
-    memcpy(filename, file, len);
-    //and apparently I need to manually free file names
+    file_drop_callback(file);
 
     file_drop_frame = true;
 }
@@ -132,8 +116,8 @@ int main(int, char**)
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGuiIO&       io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -193,23 +177,27 @@ int main(int, char**)
         while (SDL_PollEvent(&event))
         {
             ImGui_ImplSDL3_ProcessEvent(&event);
-
             if (event.type == SDL_EVENT_DROP_POSITION) {
-                printf("xxxxxxxxxxxx");
-                file_drag_frame = true;
+                float xm, ym;
+                int   xw, yw;
+                // have to call SDL_ stuff because this is outside the window render loop
+                SDL_GetGlobalMouseState(&xm,&ym);
+                SDL_GetWindowPosition(window, &xw, &yw);
+
+                drag_file(ImVec2{xm-xw, ym-yw});
             }
             if (event.type == SDL_EVENT_DROP_BEGIN) {
-                printf("drop begin");
+                drag_dropped();
             }
             if (event.type == SDL_EVENT_DROP_FILE) {
-                file_drop_callback_SDL(event);
-                printf("dropping");
+                file_drop_callback_SDL3(event);
+                drag_dropped();
             }
             if (event.type == SDL_EVENT_DROP_TEXT) {
-                printf("drop text");
+                drag_dropped();
             }
             if (event.type == SDL_EVENT_DROP_COMPLETE) {
-                printf("drop complete");
+                drag_dropped();
             }
 
 
