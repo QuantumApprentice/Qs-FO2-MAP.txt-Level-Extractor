@@ -240,7 +240,7 @@ int main(int, char**)
                 show_demo_window = !show_demo_window;
             }
 
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
             map_txt_gui();
 

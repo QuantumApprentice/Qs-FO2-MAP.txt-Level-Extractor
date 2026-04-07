@@ -1,61 +1,70 @@
 #include <imgui_internal.h>
-#include "map_txt_gui.h"
 #include "io_Platform.h"
+#include "map_txt_gui.h"
+#include "map_txt_parser.h"
 
 
-bool is_hovering   = false;
-int  map_box       = -1;
-char*   name_left  = NULL;
-uint8_t* map_left  = NULL;
-char*   name_right = NULL;
-uint8_t* map_right = NULL;
+bool   is_hovering = false;
+int       list_box = -1;
 
+#define NAME_LENGTH               (16)
 
-#define NAME_LENGTH         (16)
-static char hl[NAME_LENGTH] = {"empty##1"};
-static char hm[NAME_LENGTH] = {"empty##2"};
-static char hr[NAME_LENGTH] = {"empty##3"};
-void file_drop_callback(const char* full_path)
+char head_L[NAME_LENGTH] = {"empty##1"};
+char head_M[NAME_LENGTH] = {"empty##2"};
+char head_R[NAME_LENGTH] = {"empty##3"};
+void update_labels(map_lvls* map, int list_box)
 {
-    if (map_box == -1) {
+    if (list_box == -1) {
         return;
     }
 
-    uint8_t* file_box = NULL;
+    snprintf((list_box == 0) ? head_L : head_R, NAME_LENGTH, "%s", map->map_name);
+
+    for (size_t i = 0; i < 3; i++) {
+        map->label_ptr[i] = map->label[i];
+        if (map->level[i]) {
+            snprintf(map->label_ptr[i], NAME_LENGTH, "%d:%s", i, map->map_name);
+        } else {
+            snprintf(map->label_ptr[i], NAME_LENGTH, "empty");
+        }
+    }
+}
+
+map_lvls map_L;
+map_lvls map_R;
+void file_drop_callback(const char* full_path)
+{
+    if (list_box == -1) {
+        return;
+    }
+
     char* file_name   = NULL;
     int len = strlen(full_path) + 1;
     file_name = (char*)malloc(len);
     memcpy(file_name, full_path, len);
 
-    char* start = strrchr(file_name,'/')+1;
 
-    if (map_box == 0) {
-        file_box  = map_left;
-        if (name_left) {
-            free(name_left);
-            name_left = NULL;
-        }
-        name_left = file_name;
-        strncpy(hl,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    map_lvls* map_ptr = NULL;
+    if (list_box == 0) {
+        map_ptr   = &map_L;
     } else
-    if (map_box == 1) {
-        file_box   = map_right;
-        if (name_right) {
-            free(name_right);
-            name_right = NULL;
-        }
-        name_right = file_name;
-        strncpy(hr,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    if (list_box == 1) {
+        map_ptr   = &map_R;
     }
 
-    if (file_box) {
-        free(file_box);
-        file_box = NULL;
+    if (map_ptr->data) {
+        free(map_ptr->data);
+        free(map_ptr->file_str);
+        memset(map_ptr,0,sizeof(*map_ptr));
     }
+    map_ptr->data = io_load_file(file_name);
+    map_ptr->file_str = file_name;
+    map_ptr->map_name = strrchr(file_name,'/')+1;
 
-    file_box = io_load_file(file_name);
+    parse_map_txt(map_ptr->data, map_ptr);
+    update_labels(map_ptr, list_box);
 
-    map_box = -1;
+    list_box = -1;
 }
 
 void drag_file(ImVec2 pos)
@@ -72,14 +81,16 @@ void drag_dropped()
 
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDown[0] = false;
-    // map_box = -1;
+    list_box = -1;
 }
 
 // kind of dumb, but...
-// if mouse enters the boundaries of the previous item
+// if mouse enters the window but is not over previous item
+// then draw highlight border around the previous item
 // (in this case it's always one of the two map lists)
-// then draw highlight border around the list
-// and return true
+// and return false
+// if mouse enters the boundary of the previous item
+// then return true
 // the return value is used to determine which list item
 // to use when storing the map.txt information
 bool drag_imgui()
@@ -103,41 +114,43 @@ bool drag_imgui()
     return false;
 }
 
+#define LEFT        (0)
+#define MIDDLE      (1)
+#define RIGHT       (2)
+char label_M[3][16] = {"empty"};
+// gui interface for the whole map_txt editor
+// divided into thirds, a left map, a right map, 
+// and the new map in the middle
 bool map_txt_gui()
 {
     ImVec2 size = ImGui::CalcTextSize("AAAAAAAAA");
     ImGui::PushItemWidth(size.x);
-    static const char* map_L[] = { "Left 1", "Left 2", "Left 3" };
-    static const char* map_M[] = { "empty",   "empty",   "empty"   };
-    static const char* map_R[] = { "Right 1", "Right 2", "Right 3" };
+    static int header = -1;
 
     ImGui::Text("Map Names:");
 
 
     ImVec2 posA = ImGui::GetCursorPos();
-
-    char* start = NULL;
-    if (ImGui::Button(hl, ImVec2{size.x,0})) {
-        if (name_left) {
-            start = strrchr(name_left,'/')+1;
-            snprintf(hm, strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH, "%s##", start);
-            // strncpy(hm,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    if (ImGui::Button(head_L, ImVec2{size.x,0})) {
+        if (map_L.data) {
+            snprintf(head_M, NAME_LENGTH, "%s##", map_L.map_name);
+            header = 0;
         } else {
-            strncpy(hm,"Header1##",sizeof("Header1##"));
+            strncpy(head_M,"HeaderL##",sizeof("HeaderL##"));
         }
     }
     ImGui::SetCursorPos(ImVec2{posA.x+size.x   + 40, posA.y});
-    if (ImGui::Button(hm, ImVec2{size.x,0})) {
-        strncpy(hm,"empty",sizeof("empty"));
+    if (ImGui::Button(head_M, ImVec2{size.x,0})) {
+        header = -1;
+        strncpy(head_M,"empty",sizeof("empty"));
     }
     ImGui::SetCursorPos(ImVec2{posA.x+size.x*2 + 80, posA.y});
-    if (ImGui::Button(hr, ImVec2{size.x,0})) {
-        if (name_right) {
-            start = strrchr(name_right,'/')+1;
-            snprintf(hm, strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH, "%s##", start);
-            // strncpy(hm,start,strlen(start) < NAME_LENGTH ? strlen(start) : NAME_LENGTH);
+    if (ImGui::Button(head_R, ImVec2{size.x,0})) {
+        if (map_R.data) {
+            snprintf(head_M, NAME_LENGTH, "%s##", map_R.map_name);
+            header = 1;
         } else {
-            strncpy(hm,"Header2##",sizeof("Header2##"));
+            strncpy(head_M,"HeaderR##",sizeof("HeaderR##"));
         }
     }
 
@@ -146,35 +159,47 @@ bool map_txt_gui()
     static int selection[3] = { 0, 1, 2 };
 
 
-
-    ImGui::ListBox("##L", &selection[0], map_L, IM_COUNTOF(map_L));
+    // left third
+    ImGui::ListBox("##L", &selection[0], map_L.label_ptr, IM_COUNTOF(map_L.label_ptr));
     if (drag_imgui()) {
-        map_box = 0;
+        list_box = 0;
     }
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x   +  5, posB.y});
     if (ImGui::Button(">##L->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
-        //QTODO: move from left to middle
+        // replace middle selection with selection on left
+        strncpy(label_M[selection[MIDDLE]],map_L.label_ptr[selection[LEFT]],NAME_LENGTH);
     }
 
+    // middle third
+    char* label_ptr_M[] = {label_M[0],label_M[1],label_M[2]};
     ImGui::SetCursorPos(ImVec2{posB.x+size.x   + 40, posB.y});
-    ImGui::ListBox("##M", &selection[1], map_M, IM_COUNTOF(map_M));
+    ImGui::ListBox("##M", &selection[1], label_ptr_M, IM_COUNTOF(label_ptr_M));
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 45, posB.y});
     if (ImGui::Button("<##R->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
-        //QTODO: move from right to middle
+        // replace middle selection with selection on right
+        strncpy(label_M[selection[MIDDLE]],map_R.label_ptr[selection[RIGHT]],NAME_LENGTH);
     }
 
-
-
+    // right third
     ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 80, posB.y});
-    ImGui::ListBox("##R", &selection[2], map_R, IM_COUNTOF(map_R));
+    ImGui::ListBox("##R", &selection[2], map_R.label_ptr, IM_COUNTOF(map_R.label_ptr));
     if (drag_imgui()) {
-        map_box = 1;
+        list_box = 1;
     }
 
     ImGui::PopItemWidth();
 
+
+
+    if (ImGui::Button("Export")) {
+        // parse_map_txt(map_left, map_M, header);
+    }
+    if (header == -1) {
+        ImGui::SameLine();
+        ImGui::Text("Pick a header first");
+    }
 
     return false;
 }
