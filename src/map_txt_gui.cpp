@@ -4,11 +4,17 @@
 #include "map_txt_parser.h"
 
 
-bool   is_hovering = false;
-int       list_box = -1;
+bool is_hovering = false;
+int list_box     = -1;
 
-#define NAME_LENGTH               (16)
+#define NAME_LENGTH     (16)
+#define LEFT            (0)
+#define MIDDLE          (1)
+#define RIGHT           (2)
 
+map_lvls map_L;
+map_lvls map_R;
+char label_M[3][16] = {"empty"};
 char head_L[NAME_LENGTH] = {"empty##1"};
 char head_M[NAME_LENGTH] = {"empty##2"};
 char head_R[NAME_LENGTH] = {"empty##3"};
@@ -19,6 +25,8 @@ void update_labels(map_lvls* map, int list_box)
     }
 
     snprintf((list_box == 0) ? head_L : head_R, NAME_LENGTH, "%s", map->map_name);
+    memset(label_M,0,sizeof(label_M));
+    strncpy(label_M[0],"empty",sizeof("empty"));
 
     for (size_t i = 0; i < 3; i++) {
         map->label_ptr[i] = map->label[i];
@@ -30,8 +38,6 @@ void update_labels(map_lvls* map, int list_box)
     }
 }
 
-map_lvls map_L;
-map_lvls map_R;
 void file_drop_callback(const char* full_path)
 {
     if (list_box == -1) {
@@ -57,12 +63,15 @@ void file_drop_callback(const char* full_path)
         free(map_ptr->file_str);
         memset(map_ptr,0,sizeof(*map_ptr));
     }
-    map_ptr->data = io_load_file(file_name);
+    file_info* file   = io_load_file(file_name);
     map_ptr->file_str = file_name;
+    map_ptr->file_siz = file->size;
+    map_ptr->data     = file->data;
     map_ptr->map_name = strrchr(file_name,'/')+1;
 
     parse_map_txt(map_ptr->data, map_ptr);
     update_labels(map_ptr, list_box);
+    map_level_sizes(map_ptr);
 
     list_box = -1;
 }
@@ -93,7 +102,7 @@ void drag_dropped()
 // then return true
 // the return value is used to determine which list item
 // to use when storing the map.txt information
-bool drag_imgui()
+bool hover_box()
 {
     if (is_hovering) {
         ImVec2 list_min  = ImGui::GetItemRectMin();
@@ -114,10 +123,7 @@ bool drag_imgui()
     return false;
 }
 
-#define LEFT        (0)
-#define MIDDLE      (1)
-#define RIGHT       (2)
-char label_M[3][16] = {"empty"};
+
 // gui interface for the whole map_txt editor
 // divided into thirds, a left map, a right map, 
 // and the new map in the middle
@@ -161,7 +167,7 @@ bool map_txt_gui()
 
     // left third
     ImGui::ListBox("##L", &selection[0], map_L.label_ptr, IM_COUNTOF(map_L.label_ptr));
-    if (drag_imgui()) {
+    if (hover_box()) {
         list_box = 0;
     }
 
@@ -185,7 +191,7 @@ bool map_txt_gui()
     // right third
     ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 80, posB.y});
     ImGui::ListBox("##R", &selection[2], map_R.label_ptr, IM_COUNTOF(map_R.label_ptr));
-    if (drag_imgui()) {
+    if (hover_box()) {
         list_box = 1;
     }
 
@@ -194,7 +200,7 @@ bool map_txt_gui()
 
 
     if (ImGui::Button("Export")) {
-        // parse_map_txt(map_left, map_M, header);
+        export_map_txt(label_ptr_M, &map_L, &map_R, header);
     }
     if (header == -1) {
         ImGui::SameLine();
