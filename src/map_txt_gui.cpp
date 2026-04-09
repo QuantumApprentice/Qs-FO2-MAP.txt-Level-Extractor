@@ -67,6 +67,8 @@ void file_drop_callback(const char* full_path)
     map_ptr->file_str = file_name;
     map_ptr->file_siz = file->size;
     map_ptr->data     = file->data;
+    free(file);
+
     map_ptr->map_name = strrchr(file_name,'/')+1;
 
     parse_map_txt(map_ptr->data, map_ptr);
