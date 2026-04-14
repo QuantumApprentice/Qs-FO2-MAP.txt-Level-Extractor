@@ -3,18 +3,19 @@
 #include "map_txt_parser.h"
 #include "io_Platform.h"
 
-//remove after finished
+//TODO: remove after finished
 #include <stdio.h>
 
-char* find_str(uint8_t* map_txt, char* str)
+char* find_str(uint8_t* map_txt, char* str, int len)
 {
     //TODO: check if map.data (what's being passed as map_txt)
     //      has a "\0" terminator so string parsing works
     //      else use map.file_siz
+    //TODO: just make this a normal find_string function
     char* str_start = NULL;
     char* map_str   = (char*)map_txt;
     int map_len     = strlen(map_str);
-    int str_len     = strlen(str);
+    int str_len     = len;
     for (size_t i = 0; i < map_len; i++)
     {
         if ((map_str[i] == str[0])
@@ -37,12 +38,12 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
     }
 
     map->data  = map_data;
-    map->level[0] = find_str(map_data,(char*)"square_elev: 0");
-    map->level[1] = find_str(map_data,(char*)"square_elev: 1");
-    map->level[2] = find_str(map_data,(char*)"square_elev: 2");
+    map->level[0] = find_str(map_data,(char*)"square_elev: 0", sizeof("square_elev: 0")-1);
+    map->level[1] = find_str(map_data,(char*)"square_elev: 1", sizeof("square_elev: 1")-1);
+    map->level[2] = find_str(map_data,(char*)"square_elev: 2", sizeof("square_elev: 2")-1);
 
-    map->scripts = find_str(map_data,(char*)">>>>>>>>>>: SCRIPTS <<<<<<<<<<");
-    map->objects = find_str(map_data,(char*)">>>>>>>>>>: OBJECTS <<<<<<<<<<");
+    map->scripts = find_str(map_data,(char*)">>>>>>>>>>: SCRIPTS <<<<<<<<<<", sizeof(">>>>>>>>>>: SCRIPTS <<<<<<<<<<")-1);
+    map->objects = find_str(map_data,(char*)">>>>>>>>>>: OBJECTS <<<<<<<<<<", sizeof(">>>>>>>>>>: OBJECTS <<<<<<<<<<")-1);
 }
 
 //assigns level string sizes
@@ -99,12 +100,13 @@ char* parse_objects(map_lvls* map, int level)
         }
         if (io_strncmp(&map->objects[i], "[OBJECT BEGIN]", sizeof("[OBJECT BEGIN]")-1) == 0) {
             begin = &map->objects[i];
+            i += sizeof("[OBJECT BEGIN]");
             continue;
         }
         if (io_strncmp(&map->objects[i], "obj_elev: ", sizeof("obj_elev: ")-1) == 0) {
             char l = level + '0';
             char o = map->objects[i + sizeof("obj_elev: ")-1];
-            if (map->objects[i + sizeof("obj_elev: ")-1] != (level + '0')) {
+            if (o != l) {
                 continue;
             }
         }
@@ -121,15 +123,168 @@ char* parse_objects(map_lvls* map, int level)
     return objects_str;
 }
 
-void parse_scripts(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R)
+// #define BUILT_TILE_LEN              (sizeof("built_tile: ")-1)
+// if not on this level return 0
+// if on this level return length of script string
+int script_spatial(char* script_txt, int remainder, int level)
+{
+    int built_tile_len = sizeof("built_tile: ")        -1;
+    int radius_len     = sizeof("sp.radius: ")         -1;
+    int scr_id_len     = sizeof("scr_id: ")            -1;
+    int scr_num_len    = sizeof("scr_num: ")           -1;
+    int objects_len    = sizeof(">>>>>>>>>>: OBJECTS") -1;
+
+    for (size_t i = 0; i < remainder; i++) {
+        if (script_txt[i] != 'b') {
+            continue;
+        }
+        if (io_strncmp(&script_txt[i], "built_tile: ", built_tile_len) != 0) {
+            continue;
+        }
+
+        int spatial_level = -1;
+        int spatial_tile = atoi(&script_txt[i + built_tile_len]);
+        //TODO: make this look like the script parsing switch in parse_scripts
+        if ((spatial_tile >= 0) && (spatial_tile < 40000)) {
+            spatial_level = 0;
+        } else
+        if (spatial_tile & 0x20000000) {
+            spatial_level = 1;
+        } else
+        if (spatial_tile & 0x40000000) {
+            spatial_level = 2;
+        } else {
+            printf("ERROR: something went wrong while parsing spatial scripts\n");
+            return 0;
+        }
+
+        if (spatial_level != level) {
+            return 0;
+        }
+
+        while (i++ < remainder) {
+            if ((script_txt[i] != 's') && (script_txt[i] != '>')) {
+                continue;
+            }
+            if (io_strncmp(&script_txt[i], "sp.radius: ", radius_len) == 0) {
+                while (script_txt[i++] != '\n') {}
+                return i+2;     //want to capture trailing "/r/n"
+            }
+            if ((io_strncmp(&script_txt[i], "scr_id: ",            scr_id_len ) == 0)
+            ||  (io_strncmp(&script_txt[i], "scr_num: ",           scr_num_len) == 0)
+            ||  (io_strncmp(&script_txt[i], ">>>>>>>>>>: OBJECTS", objects_len) == 0)) {
+                return (i-1);
+            }
+        }
+    }
+
+    printf("ERROR reached end of script_txt before finding SPATIAL script ending\n");
+    return 0;
+}
+
+//TODO: maybe parse the object obj_sid values into an int array?
+//      then check the array instead of doing a string search here
+//      (would definitely be more reliable)
+//this currently checks if the passed in script id
+// is in the passed in string of objects
+bool check_object_level(char* id, char* objects)
+{
+    int id_len = 0;
+    while ((id[id_len] >= '0') and id[id_len] <= '9') {
+        id_len++;
+    }
+
+    char* found = find_str((uint8_t*)objects, id, id_len);
+    if (found) {
+        return true;
+    }
+
+    return false;
+}
+
+int script_object(char* script_txt, int remainder, int level, char* objects)
+{
+    int scr_id_len  = sizeof("scr_id: ")            -1;
+    int scr_num_len = sizeof("scr_num: ")           -1;
+    int objects_len = sizeof(">>>>>>>>>>: OBJECTS") -1;
+
+    // objects being passed in are only on this level,
+    // so only scripts attached to those objects should be copied
+    if (check_object_level(&script_txt[scr_id_len], objects) == false) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < remainder; i++) {
+        if (script_txt[i] != 's') {
+            continue;
+        }
+        // if (io_strncmp(&script_txt[i], "scr_id: ", scr_id_len) != 0) {
+        //     continue;
+        // }
+
+
+
+        if (io_strncmp(&script_txt[i], "scr_num_local_vars: ", sizeof("scr_num_local_vars: ")-1) == 0) {
+            while (script_txt[i++] != '\n') {}
+            return i+2;     //want to capture trailing "/r/n"
+        }
+
+        // while (i++ < remainder) {
+        //     if ((script_txt[i] != 's') && (script_txt[i] != '>')) {
+        //         continue;
+        //     }
+        //     if ((io_strncmp(&script_txt[i], "scr_id: ",            scr_id_len ) == 0)
+        //     ||  (io_strncmp(&script_txt[i], "scr_num: ",           scr_num_len) == 0)
+        //     ||  (io_strncmp(&script_txt[i], ">>>>>>>>>>: OBJECTS", objects_len) == 0)) {
+        //         return i-1;
+        //     }
+        // }
+    }
+
+    printf("ERROR reached end of script_txt before finding OBJECT script ending\n");
+    return 0;
+}
+
+
+struct parsed_scripts
+{
+    char* scr_num[5]   = {0};
+    int scr_num_cnt[5] = {0};
+};
+struct spatial_script
+{
+    uint scr_id               = 0;
+    uint scr_next             = 0;
+    uint scr_flags            = 0;
+    uint scr_script_idx       = 0;
+    uint scr_oid              = 0;
+    uint scr_local_var_offset = 0;
+    uint scr_num_local_vars   = 0;
+
+    uint built_tile           = 0;
+
+    uint radius               = 0;
+};
+
+
+
+enum script_type {
+    SCRIPT_SYSTEM  = 0x0,
+    SCRIPT_SPATIAL = 0x1,
+    SCRIPT_TIMED   = 0x2,
+    SCRIPT_OBJECTS = 0x3,
+    SCRIPT_CRITTER = 0x4,
+};
+
+parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 {
     // >>>>>>>>>>: SCRIPTS <<<<<<<<<<
 
 
     // SCRS:
-    // scr_num: 0      //  ==> unknown
+    // scr_num: 0      //  ==> s_system
     // scr_num: 0      //  ==> spatial scripts
-    // scr_num: 0      //  ==> unknown
+    // scr_num: 0      //  ==> s_time
     // scr_num: 0      //  ==> all non-critter objects
     // scr_num: 0      //  ==> all critter objects
     //
@@ -152,20 +307,21 @@ void parse_scripts(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R)
     //                      //     for that reason each object should have a unique obj_sid matching scr_id
     //                      //     even if the same script is reused for multiple objects
     //                      // ==> seems to be generated whenever a script is attached
-    // scr_id: 67108864     // ==> 0x40000000  ==> indicates a critter object is attached?
-    // scr_id: 50331648     // ==> 0x30000000  ==> all other object types?
-    // scr_id: 16777216     // ==> 0x10000000  ==> spatial script types?
-    //                      // ==> 0x0 and 0x2 appear to be unused?
+    // scr_id: 67108864     // ==> 0x04000000  ==> indicates a critter object is attached?
+    // scr_id: 50331648     // ==> 0x03000000  ==> all other object types?
+    // scr_id: 16777216     // ==> 0x01000000  ==> spatial script types?
+    //                      // ==> 0x00 and 0x02 appear to be unused?
 
 
-    // ...
     /* spatial scripts have these extra fields */
+    // scr_id: 16777216     // ==> 0x01000000  ==> spatial script types
+    // ...
     // scr_udata.sp.built_tile: 39999       // ==> highest tile number for level 0, starts at 0
     // scr_udata.sp.radius: 0
     /*                                         */
 
-    // scr_udata.sp.built_tile: 536870912   // ==> 0x20000000  ==> start number for level 1
-    // scr_udata.sp.built_tile: 1073741824  // ==> 0x40000000  ==> start number for level 2
+    // scr_udata.sp.built_tile: 536870912   // ==> 0x02000000  ==> start tile for level 1
+    // scr_udata.sp.built_tile: 1073741824  // ==> 0x04000000  ==> start tile for level 2
 
 
     // [OBJECT BEGIN]
@@ -174,8 +330,171 @@ void parse_scripts(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R)
     // ...
     // [OBJECT END]
 
+    //hooo boy, ok this guy is going to need a separate string for each script type
+    //  (just in case the scr_num entries need to be propperly tracked)
+    //  also spatial script type needs to be separated by which level they're located on
+    //  and then re-assigned to the new level for the new map
+    //also we need to make sure any scr_id/obj_sid pair don't overlap other pairs
+
+
+    int scripts_size = map->objects - map->scripts;
+
+    parsed_scripts scrs;
+
+    for (size_t i = 0; i < 5; i++) {
+        scrs.scr_num[i] = (char*)malloc(scripts_size);
+    }
+    char* scr_ptr[5] = {
+        scrs.scr_num[0],
+        scrs.scr_num[1],
+        scrs.scr_num[2],
+        scrs.scr_num[3],
+        scrs.scr_num[4]
+        };
+
+
+    for (size_t i = 0; i < scripts_size; i++)
+    {
+        int script_len = 0;
+        if (map->scripts[i] != 's') {
+            // since "[[SCRIPT]]" is used every 16 entries for each scr_num count
+            //  it's not useful to sort with
+            // while sorting by "scr_num:" is possible by incrementing per type,
+            // this simply checks each script by parsing the scr_id for type
+            continue;
+        }
+
+        if (io_strncmp(&map->scripts[i], "scr_id: ", sizeof("scr_id: ")-1) == 0) {
+
+            int scr_id = atoi(&map->scripts[i +sizeof("scr_id: ")-1]);
+            switch ((scr_id >> 24) & 0x7)   //need only these 3 bits to check type
+            {
+            case (SCRIPT_SYSTEM): { //  (currently not handled)
+                printf("ERROR Caught a SYSTEM script?\n");
+                break;
+                }
+            case (SCRIPT_SPATIAL): {
+                int spatial_len = script_spatial(&map->scripts[i], scripts_size - i, level);
+                if (spatial_len > 0) {
+                    strncpy(scr_ptr[1], &map->scripts[i], spatial_len);
+                    scr_ptr[1]          += spatial_len;
+                    scrs.scr_num_cnt[1] += 1;
+                    i                   += spatial_len - 1;
+                }
+                //TODO: set spatial scripts to the new level
+                break;
+                }
+            case (SCRIPT_TIMED): {  //  (currently not handled)
+                printf("ERROR Caught a TIMER script?\n");
+                break;
+                }
+            case (SCRIPT_OBJECTS): {
+                int object_len = script_object(&map->scripts[i], scripts_size - i, level, objects);
+                if (object_len > 0) {
+                    strncpy(scr_ptr[3], &map->scripts[i], object_len);
+                    scr_ptr[3]          += object_len;
+                    scrs.scr_num_cnt[3] += 1;
+                    i                   += object_len;
+                }
+                break;
+                }
+            case (SCRIPT_CRITTER): {
+                int critter_len = script_object(&map->scripts[i], scripts_size - i, level, objects);
+                if (critter_len > 0) {
+                    strncpy(scr_ptr[4], &map->scripts[i], critter_len);
+                    scr_ptr[4]          += critter_len;
+                    scrs.scr_num_cnt[4] += 1;
+                    i                   += critter_len - 1;
+                }
+                break;
+                }
+            default:
+                printf("ERROR script type not handled\n");
+                break;
+            }
+        }
+    }
+
+    return scrs;
+
+    // int total_size = 0;
+    // int scr_num_total = 0;
+    // for (size_t i = 0; i < 5; i++) {
+    //     *scr_ptr[i] = '\0';
+    //     // total_size += strlen(scr_num[i]);
+    //     // scr_num_total += scr_num_cnt[i];
+    //     printf("[%d]-------------------------\n", i);
+    //     printf("%s\n", scr_num[i]);
+    // }
+
+    // total_size += scr_num_total * sizeof("\r\n[[SCRIPT]]\r\n\r\n");
+
+
+    // printf("-=======================================-\n");
+    // // char* out = (char*)malloc(total_size);
+    // char* out = (char*)malloc(scripts_size);
+    // char* ptr = out;
+    // snprintf(ptr, sizeof("SCRS:\r\n"), "SCRS:\r\n");
+    // ptr += sizeof("SCRS:\r\n");
+    // for (size_t i = 0; i < 5; i++)
+    // {
+    //     // strncpy(ptr, scr_num[i], strlen(scr_num[i]));
+    //     snprintf(ptr, strlen(scr_num[i]),
+    //         "scr_num: %i\r\n"
+    //         "%s",
+    //         scr_num_cnt[i], scr_num[i]
+    //     );
+    //     ptr += strlen(ptr);
+    //     // ptr += strlen(scr_num[i] + sizeof("scr_num: %i\r\n"));
+    // }
     
+
+
+    // total_size += sizeof(
+    //     "SCRS:\r\n"
+    //     "scr_num: %i\r\n%s"
+    //     "scr_num: %i\r\n%s"
+    //     "scr_num: %i\r\n%s"
+    //     "scr_num: %i\r\n"
+    //     "%s\r\n"
+    //     "scr_num: %i\r\n"
+    //     "%s\r\n"
+    //     "\r\n[[SCRIPT]]\r\n\r\n%s"
+    // );
+
+    // char* out = (char*)malloc(total_size);
+    // snprintf(out, total_size,
+    //     "SCRS:\r\n"
+    //     "scr_num: %i\r\n"
+    //     "scr_num: %i\r\n%s"
+    //     "scr_num: %i\r\n%s"
+    //     "scr_num: %i\r\n"
+    //     "%s\r\n"
+    //     "scr_num: %i\r\n"
+    //     "%s\r\n",
+    //     scr_num_cnt[0], (scr_num_cnt[0] > 0) ? "\r\n[[SCRIPT]]\r\n\r\n%s", scr_num[0] : "",
+    //     scr_num_cnt[1], scr_num[1],
+    //     scr_num_cnt[2], scr_num[2],
+    //     scr_num_cnt[3], scr_num[3],
+    //     scr_num_cnt[4], scr_num[4]
+    // );
+
+    // for (size_t i = 0; i < 5; i++) {
+    //     free(scr_num[i]);
+    // }
+
+    // return out;
 }
+
+// int spatial_val(const char* val_type, int val_len, spatial_script* spatials, char* scr_ptr)
+// {
+//     int i = 0;
+//     if (io_strncmp(scr_ptr, val_type, val_len) == 0) {
+//         i += val_len;
+//         spatials->scr_flags = atoi(&scr_ptr[i]);
+//         while (scr_ptr[i++] != '\n');   //go to next line
+//     }
+// }
 
 void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header)
 {
@@ -224,19 +543,151 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     // copy object strings from source maps into char* allocated memory
     // only objects on copied levels are copied over
     char* objects[3] = {0};
-    for (size_t i = 0; i < 3; i++) {
-        if (io_strncmp(label_ptr_M[i], "empty", NAME_LENGTH) == 0) {
+    // char* scripts[3] = {0};
+    parsed_scripts scripts[3] = {0};
+    for (size_t dst_lvl = 0; dst_lvl < 3; dst_lvl++) {
+        if (label_ptr_M[dst_lvl][0] == '\0') {
             continue;
         }
-        for (size_t j = 0; j < 3; j++) {
-            if (io_strncmp(label_ptr_M[i], map_L->label_ptr[j], NAME_LENGTH) == 0) {
-                objects[i] = parse_objects(map_L, i);
+        if (io_strncmp(label_ptr_M[dst_lvl], "empty", NAME_LENGTH) == 0) {
+            continue;
+        }
+        for (size_t src_lvl = 0; src_lvl < 3; src_lvl++) {
+            if (io_strncmp(label_ptr_M[dst_lvl], map_L->label_ptr[src_lvl], NAME_LENGTH) == 0) {
+                objects[dst_lvl] = parse_objects(map_L, src_lvl);
+                // need to know which objects on source level when parsing object scripts
+                scripts[dst_lvl] = parse_scripts(map_L, objects[dst_lvl], src_lvl);
             } else
-            if (io_strncmp(label_ptr_M[i], map_R->label_ptr[j], NAME_LENGTH) == 0) {
-                objects[i] = parse_objects(map_R, i);
+            if (io_strncmp(label_ptr_M[dst_lvl], map_R->label_ptr[src_lvl], NAME_LENGTH) == 0) {
+                objects[dst_lvl] = parse_objects(map_R, src_lvl);
+                // need to know which objects on source level when parsing object scripts
+                scripts[dst_lvl] = parse_scripts(map_R, objects[dst_lvl], src_lvl);
             }
         }
     }
+
+
+    //>>>>>>>>>>: SCRIPTS <<<<<<<<<<
+
+    // assign new levels to spatial scripts
+    for (size_t elevation = 0; elevation < 3; elevation++) {
+        if (!scripts[elevation].scr_num_cnt[SCRIPT_SPATIAL]) {
+            continue;
+        }
+
+        int spatial_cnt = scripts[elevation].scr_num_cnt[SCRIPT_SPATIAL];
+        spatial_script* spatials = (spatial_script*)malloc(spatial_cnt * sizeof(spatial_script));
+        char* scr_ptr = scripts[elevation].scr_num[SCRIPT_SPATIAL];
+        int len = strlen(scr_ptr);
+        int j = 0;
+        for (size_t i = 0; i < len; i++) {
+            if (scr_ptr[i] != 's') {
+                continue;
+            }
+
+
+
+            // scr_id: 16777216
+            if (io_strncmp(&scr_ptr[i], "scr_id: ", sizeof("scr_id")) == 0) {
+                i += sizeof("scr_id");
+                spatials[j].scr_id = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_next: 4294967295
+            if (io_strncmp(&scr_ptr[i], "scr_next: ", sizeof("scr_next:")) == 0) {
+                i += sizeof("scr_next:");
+                spatials[j].scr_next = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_flags: 0
+            if (io_strncmp(&scr_ptr[i], "scr_flags: ", sizeof("scr_flags:")) == 0) {
+                i += sizeof("scr_flags:");
+                spatials[j].scr_flags = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_script_idx: 221
+            if (io_strncmp(&scr_ptr[i], "scr_script_idx: ", sizeof("scr_script_idx:")) == 0) {
+                i += sizeof("scr_script_idx:");
+                spatials[j].scr_script_idx = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_oid: 1919251315
+            if (io_strncmp(&scr_ptr[i], "scr_oid: ", sizeof("scr_oid:")) == 0) {
+                i += sizeof("scr_oid:");
+                spatials[j].scr_oid = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_local_var_offset: 4294967295
+            if (io_strncmp(&scr_ptr[i], "scr_local_var_offset: ", sizeof("scr_local_var_offset:")) == 0) {
+                i += sizeof("scr_local_var_offset:");
+                spatials[j].scr_local_var_offset = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            // scr_num_local_vars: 0
+            if (io_strncmp(&scr_ptr[i], "scr_num_local_vars: ", sizeof("scr_num_local_vars:")) == 0) {
+                i += sizeof("scr_num_local_vars:");
+                spatials[j].scr_num_local_vars = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            if (scr_ptr[i] == '\r') {
+                while (scr_ptr[i++] != '\n');
+            }
+            // scr_udata.sp.built_tile: 21925
+            if (io_strncmp(&scr_ptr[i], "scr_udata.sp.built_tile: ", sizeof("scr_udata.sp.built_tile:")) == 0) {
+                i += sizeof("scr_udata.sp.built_tile:");
+                spatials[j].built_tile = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+            if (scr_ptr[i] == '\r') {
+                while (scr_ptr[i++] != '\n');
+            }
+            // scr_udata.sp.radius: 0
+            if (io_strncmp(&scr_ptr[i], "scr_udata.sp.radius: ", sizeof("scr_udata.sp.radius:")) == 0) {
+                i += sizeof("scr_udata.sp.radius:");
+                spatials[j].radius = atoi(&scr_ptr[i]);
+                while (scr_ptr[i++] != '\n');   //go to next line
+            }
+
+
+
+
+            // if (scr_ptr[i] != 'b') {
+            //     continue;
+            // }
+            // if (io_strncmp(&scr_ptr[i], "built_tile: ", built_tile_len) != 0) {
+            //     continue;
+            // }
+            // i += built_tile_len;
+            // uint id = atoi(&scr_ptr[i]);
+
+
+
+            //actually assign the new level here
+            uint tile = spatials[j].built_tile;
+            //      20004FE5
+            tile &= 0x0fffffff;
+            if (elevation != 0) {
+                tile |= (0x1 << (28 + elevation));
+            }
+            spatials[j].built_tile = tile;
+
+
+
+            // char tmp[32];
+            // snprintf(tmp,32,"%ud",id);
+            // strncpy(&scr_ptr[i], tmp, 32);
+            // strfromd(&scr_ptr[i], )
+            // if (id & (0x1 << (24 + elevation))) {
+                
+            // }
+
+            j++;
+        }
+    }
+
+
+
+    //>>>>>>>>>>: OBJECTS <<<<<<<<<<
 
     // assign new levels (matching new map) to copied objects
     for (size_t elevation = 0; elevation < 3; elevation++)
@@ -248,8 +699,7 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
         char* obj_ptr = objects[elevation];
         int len = strlen(obj_ptr);
         int obj_elev_len = sizeof("obj_elev: ")-1;  //-1 to account for the auto-appended '\0' character
-        for (size_t j = 0; j < len; j++)
-        {
+        for (size_t j = 0; j < len; j++) {
             if (obj_ptr[j] != 'o') {
                 continue;
             }
@@ -258,11 +708,31 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
                 obj_ptr[j] = elevation + '0';
             }
         }
+    }
 
+
+
+    //print out scripts
+    for (size_t elevation = 0; elevation < 3; elevation++) {
+        printf("scripts level %d:-----------------------------\n\n\n", elevation);
+        for (size_t i = 0; i < 5; i++) {
+            printf("scr_num: %i\n", scripts[elevation].scr_num_cnt[i]);
+            if (scripts[elevation].scr_num_cnt[i]) {
+                printf("%s\r\n", scripts[elevation].scr_num[i]);
+            }
+        }
+    }
+    //print out objects
+    for (size_t elevation = 0; elevation < 3; elevation++) {
         printf("%s\n", objects[elevation]);
     }
 
 
-    // parse_scripts();
+
+
+
+    // char* out = (char*)malloc()
+    // snprintf()
+
 
 }
