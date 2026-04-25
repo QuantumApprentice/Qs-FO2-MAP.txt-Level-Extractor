@@ -18,9 +18,16 @@ char* find_str(uint8_t* map_txt, char* str, int len)
     int str_len     = len;
     for (size_t i = 0; i < map_len; i++)
     {
-        if ((map_str[i] == str[0])
-        && (io_strncasecmp(&map_str[i], str, str_len) == 0)) {
-            str_start = &map_str[i];
+        if (map_str[i] == str[0]) {
+            if (len > 2) {
+                if (map_str[i+2] != str[2]) {
+                    continue;
+                }
+            }
+            if (io_strncasecmp(&map_str[i], str, str_len) == 0) {
+                str_start = &map_str[i];
+                break;
+            }
         }
     }
     return str_start;
@@ -37,10 +44,16 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
         return;
     }
 
-    map->data  = map_data;
-    map->level[0] = find_str(map_data,(char*)"square_elev: 0", sizeof("square_elev: 0")-1);
-    map->level[1] = find_str(map_data,(char*)"square_elev: 1", sizeof("square_elev: 1")-1);
-    map->level[2] = find_str(map_data,(char*)"square_elev: 2", sizeof("square_elev: 2")-1);
+    map->data = map_data;
+    for (size_t i = 0; i < 3; i++)
+    {
+        char buff[24];
+        snprintf(buff, 24, "square_elev: %d\r\n\r\n", i);
+        char* tmp = find_str(map_data, buff, strlen(buff));
+        if (tmp) {
+            map->level[i] = tmp + strlen(buff);
+        }
+    }
 
     map->scripts = find_str(map_data,(char*)">>>>>>>>>>: SCRIPTS <<<<<<<<<<", sizeof(">>>>>>>>>>: SCRIPTS <<<<<<<<<<")-1);
     map->objects = find_str(map_data,(char*)">>>>>>>>>>: OBJECTS <<<<<<<<<<", sizeof(">>>>>>>>>>: OBJECTS <<<<<<<<<<")-1);
@@ -51,19 +64,26 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
 //so we have to check each one in turn
 void map_level_sizes(map_lvls* map)
 {
+    // char* end = NULL;
     if (map->level[0]) {
         if (map->level[1]) {
-            map->lvl_sizes[0] = map->level[1] - map->level[0];
+            char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
+            map->lvl_sizes[0] = end - map->level[0];
+            // map->lvl_sizes[0] = map->level[1] - map->level[0];
         } else
         if (map->level[2]) {
-            map->lvl_sizes[0] = map->level[2] - map->level[0];
+            char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+            map->lvl_sizes[0] = end - map->level[0];
+            // map->lvl_sizes[0] = map->level[2] - map->level[0];
         } else {
             map->lvl_sizes[0] = map->scripts  - map->level[0];
         }
     }
     if (map->level[1]) {
         if (map->level[2]) {
-            map->lvl_sizes[1] = map->level[2] - map->level[1];
+            char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+            map->lvl_sizes[1] = end - map->level[1];
+            // map->lvl_sizes[1] = map->level[2] - map->level[1];
         } else {
             map->lvl_sizes[1] = map->scripts  - map->level[1];
         }
@@ -73,12 +93,18 @@ void map_level_sizes(map_lvls* map)
     }
 
     if (map->level[0]) {
-        map->header_size = (uint64_t)(map->level[0] - (char*)map->data);
+        char* end = find_str(map->data, "square_elev: 0\r\n\r\n", strlen("square_elev: 0\r\n\r\n"));
+        map->header_size = end - (char*)map->data;
+        // map->header_size = (uint64_t)(map->level[0] - (char*)map->data);
     } else
     if (map->level[1]) {
+        char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
+        map->header_size = end - (char*)map->data;
         map->header_size = (uint64_t)(map->level[1] - (char*)map->data);
     } else
     if (map->level[2]) {
+        char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+        map->header_size = end - (char*)map->data;
         map->header_size = (uint64_t)(map->level[2] - (char*)map->data);
     } else {
         map->header_size = map->scripts - (char*)map->data;
@@ -107,10 +133,14 @@ char* parse_objects(map_lvls* map, int level)
             char l = level + '0';
             char o = map->objects[i + sizeof("obj_elev: ")-1];
             if (o != l) {
+                begin = NULL;
                 continue;
             }
         }
         if (io_strncmp(&map->objects[i], "[OBJECT END]", sizeof("[OBJECT END]")-1) == 0) {
+            if (begin == NULL) {
+                continue;
+            }
             end = &map->objects[i + sizeof("[OBJECT END]") + 3];
             int size = end - begin;
             memcpy(objects_ptr, begin, size);
@@ -305,8 +335,8 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
     // scr_udata.sp.radius: 0
     /*                                         */
 
-    // scr_udata.sp.built_tile: 536870912   // ==> 0x02000000  ==> start tile for level 1
-    // scr_udata.sp.built_tile: 1073741824  // ==> 0x04000000  ==> start tile for level 2
+    // scr_udata.sp.built_tile: 536870912   // ==> 0x020000000  ==> start tile for level 1
+    // scr_udata.sp.built_tile: 1073741824  // ==> 0x040000000  ==> start tile for level 2
 
 
     // [OBJECT BEGIN]
@@ -368,7 +398,6 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
                     scrs.scr_num_cnt[1] += 1;
                     i                   += spatial_len - 1;
                 }
-                //TODO: set spatial scripts to the new level
                 break;
                 }
             case (SCRIPT_TIMED): {  //  (currently not handled)
@@ -416,6 +445,70 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 //     }
 // }
 
+void check_char_scripts(parsed_scripts* scripts, char** objects, script_type type)
+{
+    char* script_ptr = NULL;
+    uint scr_id = 0;
+    uint max_id = 0;
+
+
+    for (size_t el_out = 0; el_out < 3; el_out++)
+    {
+        for (size_t i = 0; i < strlen(scripts[el_out].scr_num[type]); i++)
+        {
+            bool match_found = false;
+            if (scripts[el_out].scr_num[type][i] != 's') {
+                continue;
+            }
+            if (io_strncmp(&scripts[el_out].scr_num[type][i], "scr_id: ", sizeof("scr_id: ")-1) != 0) {
+                continue;
+            }
+
+
+
+            script_ptr = &scripts[el_out].scr_num[type][i];
+            scr_id = atoi(&script_ptr[sizeof("scr_id: "-1)]);
+
+            for (size_t el_in = 0; el_in < 3; el_in++)
+            {
+                for (; i < strlen(script_ptr); i++)
+                {
+                    if (scripts[el_in].scr_num[type][i] != 's') {
+                        continue;
+                    }
+                    if (io_strncmp(&scripts[el_in].scr_num[type][i], "scr_id: ", sizeof("scr_id: ")-1) != 0) {
+                        continue;
+                    }
+
+                    uint tmp = atoi(&scripts[el_in].scr_num[type][i + sizeof("scr_id: ")-1]);
+                    if (max_id < tmp) {
+                        max_id = tmp;
+                    }
+                    if (scr_id == tmp) {
+                        match_found = true;
+                    }
+                }
+            }
+
+            if (match_found) {
+                max_id++;
+
+                char tmp[32];
+                snprintf(tmp, 32, "%u", scr_id);
+
+                char* obj_sid =  find_str((uint8_t*)objects[el_out], tmp, strlen(tmp));
+
+                snprintf(tmp, 32, "%u", max_id);
+                memcpy(obj_sid, tmp, strlen(tmp));
+                memcpy(&script_ptr[sizeof("scr_id: "-1)], tmp, strlen(tmp));
+            } else {
+                printf("ERROR Can't find object that scr_id %u is attached to.\n", scr_id);
+            }
+        }
+    }
+
+}
+
 void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header)
 {
     if (header == -1) {
@@ -447,17 +540,21 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     uint8_t* out_map = (uint8_t*)malloc(out_size);
     char* out_ptr = (char*)out_map;
     //header
-    snprintf(out_ptr, H_size, "%s", (char*)head);
-    out_ptr += H_size-1; //"-1" to over-write the '\0' character
+    int remainder = snprintf(out_ptr, H_size+1, "%s", (char*)head);
+    out_ptr += H_size;
     //map tiles
     for (size_t i = 0; i < 3; i++) {
         if (out_lvl[i]) {
-            snprintf(out_ptr, out_lvl_size[i], "%s", out_lvl[i]);
-            out_ptr += out_lvl_size[i];
+            snprintf(
+                out_ptr, out_lvl_size[i] + sizeof("square_elev: i\r\n\r\n"),
+                "square_elev: %i\r\n\r\n%s",
+                i, out_lvl[i]
+            );
+            out_ptr += out_lvl_size[i] + sizeof("square_elev: i\r\n\r\n") -1; //"-1" to over-write the '\0' character
         }
     }
 
-    printf("%s\n",(char*)out_map);
+    // printf("%s\n",(char*)out_map);
 
     // >>>>>>>>>>: OBJECTS <<<<<<<<<<
 
@@ -517,49 +614,42 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             if (io_strncmp(&scr_ptr[i], "scr_id: ", sizeof("scr_id")) == 0) {
                 i += sizeof("scr_id");
                 spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_id = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_next: 4294967295
             if (io_strncmp(&scr_ptr[i], "scr_next: ", sizeof("scr_next:")) == 0) {
                 i += sizeof("scr_next:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_next = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_next = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_flags: 0
             if (io_strncmp(&scr_ptr[i], "scr_flags: ", sizeof("scr_flags:")) == 0) {
                 i += sizeof("scr_flags:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_flags = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_flags = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_script_idx: 221
             if (io_strncmp(&scr_ptr[i], "scr_script_idx: ", sizeof("scr_script_idx:")) == 0) {
                 i += sizeof("scr_script_idx:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_script_idx = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_script_idx = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_oid: 1919251315
             if (io_strncmp(&scr_ptr[i], "scr_oid: ", sizeof("scr_oid:")) == 0) {
                 i += sizeof("scr_oid:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_oid = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_oid = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_local_var_offset: 4294967295
             if (io_strncmp(&scr_ptr[i], "scr_local_var_offset: ", sizeof("scr_local_var_offset:")) == 0) {
                 i += sizeof("scr_local_var_offset:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_local_var_offset = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_local_var_offset = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             // scr_num_local_vars: 0
             if (io_strncmp(&scr_ptr[i], "scr_num_local_vars: ", sizeof("scr_num_local_vars:")) == 0) {
                 i += sizeof("scr_num_local_vars:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].scr_num_local_vars = atoi(&scr_ptr[i]);
+                spatials[elevation][j].scr_num_local_vars = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             if (scr_ptr[i] == '\r') {
@@ -568,8 +658,7 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             // scr_udata.sp.built_tile: 21925
             if (io_strncmp(&scr_ptr[i], "scr_udata.sp.built_tile: ", sizeof("scr_udata.sp.built_tile:")) == 0) {
                 i += sizeof("scr_udata.sp.built_tile:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].built_tile = atoi(&scr_ptr[i]);
+                spatials[elevation][j].built_tile = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
             if (scr_ptr[i] == '\r') {
@@ -578,8 +667,7 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             // scr_udata.sp.radius: 0
             if (io_strncmp(&scr_ptr[i], "scr_udata.sp.radius: ", sizeof("scr_udata.sp.radius:")) == 0) {
                 i += sizeof("scr_udata.sp.radius:");
-                spatials[elevation][j].scr_id = atoi(&scr_ptr[i]);
-                // spatials[j].radius = atoi(&scr_ptr[i]);
+                spatials[elevation][j].radius = atoi(&scr_ptr[i]);
                 while (scr_ptr[i++] != '\n');   //go to next line
             }
 
@@ -592,8 +680,6 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             }
             spatials[elevation][j].built_tile = tile;
 
-
-
             j++;
         }
     }
@@ -602,7 +688,7 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
 
     //>>>>>>>>>>: OBJECTS <<<<<<<<<<
 
-    // assign new levels (matching new map) to copied objects
+    // assign new elevations (matching new map) to copied objects
     for (size_t elevation = 0; elevation < 3; elevation++)
     {
         if (!objects[elevation]) {
@@ -624,17 +710,38 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     }
 
 
+    int amt = 
+    snprintf(
+        out_ptr, out_size - (out_ptr - (char*)out_map),
+        ">>>>>>>>>>: SCRIPTS <<<<<<<<<<\r\n\r\n\r\n"
+        "SCRS:\r\n"
+    );
+    out_ptr += amt;
+
 
     //print out scripts
-    for (size_t elevation = 0; elevation < 3; elevation++) {
-        printf("scripts level %d:-----------------------------\n\n\n", elevation);
-        for (size_t i = 0; i < 5; i++) {
-            printf("scr_num: %i\r\n", scripts[elevation].scr_num_cnt[i]);
-            if (scripts[elevation].scr_num_cnt[i]) {
+    for (size_t i = 0; i < 5; i++) {
+        int total = scripts[0].scr_num_cnt[i] + scripts[1].scr_num_cnt[i] + scripts[2].scr_num_cnt[i];
+        // printf("scr_num: %i\r\n", scripts[elevation].scr_num_cnt[i]);
+        // printf("scr_num: %i\r\n", total);
+        int abc = 
+        snprintf(
+            out_ptr, out_size - (out_ptr - (char*)out_map),
+            "scr_num: %i\r\n", total
+        );
+        // int def = strlen(out_ptr);
+        out_ptr += strlen(out_ptr);
+
+        for (size_t elevation = 0; elevation < 3; elevation++) {
+        // printf("scripts level %d:-----------------------------\n\n\n", elevation);
+            if (scripts[elevation].scr_num_cnt[i]) {    //TODO: remove this if() check
                 if (i == SCRIPT_SPATIAL) {
                     for (size_t cnt = 0; cnt < scripts[elevation].scr_num_cnt[i]; cnt++)
                     {
-                        printf(
+                        // printf(
+                        int ghi = 
+                        snprintf(
+                            out_ptr, out_size - (out_ptr - (char*)out_map),
                             "\r\n"
                             "scr_id: %u\r\n"
                             "scr_next: %u\r\n"
@@ -644,7 +751,7 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
                             "scr_local_var_offset: %u\r\n"
                             "scr_num_local_vars: %u\r\n\r\n"
                             "scr_udata.sp.built_tile: %u\r\n\r\n"
-                            "scr_udata.sp.radius: %u\r\n\r\n"
+                            "scr_udata.sp.radius: %u\r\n"
                             ,
                             spatials[elevation][cnt].scr_id,
                             spatials[elevation][cnt].scr_next,
@@ -656,21 +763,22 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
                             spatials[elevation][cnt].built_tile,
                             spatials[elevation][cnt].radius
                         );
+                        out_ptr += strlen(out_ptr);
                     }
-                    
-                   
                 } else {
-                    printf("\r\n%s\r\n", scripts[elevation].scr_num[i]);
+                    // printf("\r\n%s\r\n", scripts[elevation].scr_num[i]);
+                    int remainder = out_size - (out_ptr - (char*)out_map);
+                    int wtf = 
+                    snprintf(
+                        out_ptr, remainder,
+                        "\r\n%s", scripts[elevation].scr_num[i]
+                    );
+                    out_ptr += strlen(out_ptr);
                 }
 
+                snprintf(out_ptr, 3, "\r\n");
+                out_ptr += strlen(out_ptr);
             }
-        }
-    }
-    //print out objects
-    for (size_t elevation = 0; elevation < 3; elevation++) {
-        printf("objects level %i------------------------\n\n",elevation);
-        if (objects[elevation]) {
-            printf("%s\n", objects[elevation]);
         }
     }
 
@@ -696,25 +804,44 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             for (size_t i = 0; i < script_cnt_out; i++)
             {
                 //check outside script against all other scripts in all 3 inside levels
-                uint scr_id = spatials[el_out][i].scr_id;
-                for (size_t el_in = el_out; el_in < 3; el_in++)
-                {
-                    //loop through all inside scripts on this level and actually do the check
-                    int script_cnt_in = scripts[el_in].scr_num_cnt[type];
-                    //if inside same elevation as first script, start at next script up
-                    //else just start at 0
-                    size_t j = (el_out == el_in) ? i+1 : 0;
-                    for (; j < script_cnt_in; j++)
+
+                //Object scripts only
+                if (type == SCRIPT_OBJECTS) {
+                    check_char_scripts(scripts, objects, SCRIPT_OBJECTS);
+                }
+                //Critter scripts only
+                if (type == SCRIPT_CRITTER) {
+                    check_char_scripts(scripts, objects, SCRIPT_CRITTER);
+                }
+
+
+
+
+
+                if (type == SCRIPT_SPATIAL) {
+                    //Spatial Scripts only
+                    uint scr_id = spatials[el_out][i].scr_id;
+                    for (size_t el_in = el_out; el_in < 3; el_in++)
                     {
-                        uint check = spatials[el_in][j].scr_id;
-                        if (scr_id == check) {
-                            reassign_id = true;
-                        }
-                        if (highest_id < spatials[el_in][j].scr_id) {
-                            highest_id = spatials[el_in][j].scr_id;
+                        //loop through all inside scripts on this level and actually do the check
+                        int script_cnt_in = scripts[el_in].scr_num_cnt[type];
+                        //if inside same elevation as first script, start at next script up
+                        //else just start at 0
+                        size_t j = (el_out == el_in) ? i+1 : 0;
+                        for (; j < script_cnt_in; j++)
+                        {
+                            uint check = spatials[el_in][j].scr_id;
+                            if (scr_id == check) {
+                                reassign_id = true;
+                            }
+                            if (highest_id < spatials[el_in][j].scr_id) {
+                                highest_id = spatials[el_in][j].scr_id;
+                            }
                         }
                     }
                 }
+
+
                 if (reassign_id) {
 
                     highest_id += 1;
@@ -722,100 +849,55 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
                         spatials[el_out][i].scr_id = highest_id;
                     }
 
-                    if (type == SCRIPT_OBJECTS || type == SCRIPT_CRITTER) {
-                        char temp[32] = {0};
-                        snprintf(temp, 32, "obj_sid: %u", spatials[el_out][i].scr_id);
-                        char* found = find_str((uint8_t*)objects[el_out], temp, strlen(temp));
+                    // if (type == SCRIPT_OBJECTS || type == SCRIPT_CRITTER) {
+                    //     char temp[32] = {0};
+                    //     snprintf(temp, 32, "obj_sid: %u", spatials[el_out][i].scr_id);
+                    //     char* found = find_str((uint8_t*)objects[el_out], temp, strlen(temp));
 
-                        if (found) {
-                            snprintf(temp, 32, "obj_sid: %u", highest_id);
-                            memcpy(found, temp, strlen(temp));
-                        } else {
-                            printf("ERROR Can't find object a script is attached to.\n");
-                        }
-                    }
-
-
-
-
-
-
-
-
-
-
+                    //     if (found) {
+                    //         snprintf(temp, 32, "obj_sid: %u", highest_id);
+                    //         memcpy(found, temp, strlen(temp));
+                    //     } else {
+                    //         printf("ERROR Can't find object a script is attached to.\n");
+                    //     }
+                    // }
                 }
-
-
             }
-            
         }
-        
-
-
-
-
-
-
-
-
-        // int script_cnt = scripts[0].scr_num_cnt[type];
-        // int script_total = scripts[0].scr_num_cnt[type] + scripts[1].scr_num_cnt[type] + scripts[2].scr_num_cnt[type];
-        // // spatial_script* sp = (spatial_script*)malloc(script_cnt * sizeof(spatial_script*));
-        // for (size_t i = 0; i < script_cnt; i++) {
-        //     uint scr_id = spatials[0][i].scr_id;
-
-        //     //level 0
-        //     for (size_t j = i+1; j < script_cnt; j++) {
-        //         uint check = spatials[0][j].scr_id;
-        //         if (scr_id == check) {
-        //             reassign_id = true;
-        //         }
-        //         if (highest_id < spatials[0][j].scr_id) {
-        //             highest_id = spatials[0][j].scr_id;
-        //         }
-        //     }
-
-        //     //level 1
-        //     script_cnt = scripts[1].scr_num_cnt[type];
-        //     for (size_t j = 0; j < script_cnt; j++) {
-        //         uint check = spatials[1][j].scr_id;
-        //         if (scr_id == check) {
-        //             reassign_id = true;
-        //         }
-        //         if (highest_id < spatials[1][j].scr_id) {
-        //             highest_id = spatials[1][j].scr_id;
-        //         }
-        //     }
-
-        //     //level 2
-        //     script_cnt = scripts[2].scr_num_cnt[type];
-        //     for (size_t j = 0; j < script_cnt; j++) {
-        //         uint check = spatials[2][j].scr_id;
-        //         if (scr_id == check) {
-        //             reassign_id = true;
-        //         }
-        //         if (highest_id < spatials[2][j].scr_id) {
-        //             highest_id = spatials[2][j].scr_id;
-        //         }
-        //     }
-
-
-        //     if (reassign_id) {
-        //         highest_id += 1;
-        //         spatials[i].scr_id = highest_id;
-        //     }
-        // }
-
-
-
     }
 
+    // printf(
+    int size = 
+    snprintf(
+        out_ptr, out_size - (out_ptr - (char*)out_map),
+        ">>>>>>>>>>: OBJECTS <<<<<<<<<<\r\n\r\n"
+        "[[OBJECTS BEGIN]]\r\n"
+    );
+    out_ptr += size;
+
+    //print out objects
+    for (size_t elevation = 0; elevation < 3; elevation++) {
+        // printf("objects level %i------------------------\n\n",elevation);
+        if (objects[elevation]) {
+            // printf("\r\n%s", objects[elevation]);
+            snprintf(
+                out_ptr, out_size - (out_ptr - (char*)out_map),
+                "\r\n%s", objects[elevation]);
+        }
+        out_ptr += strlen(out_ptr);
+    }
+    // printf("[[OBJECTS END]]\r\n");
+    snprintf(
+        out_ptr, out_size - (out_ptr - (char*)out_map),
+        "[[OBJECTS END]]\r\n"
+    );
 
 
+    // +=+=+=+=+=+
+    printf("%s\r\n", out_map);
+    // printf("+=+=+=+=+=+\n");
 
-    // char* out = (char*)malloc()
-    // snprintf()
+
 
 
 }
