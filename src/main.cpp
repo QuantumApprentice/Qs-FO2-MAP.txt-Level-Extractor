@@ -96,7 +96,7 @@ int main(int, char**)
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
     SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    SDL_Window* window = SDL_CreateWindow("Dear ImGui SDL3+OpenGL3 example", (int)(640 * main_scale), (int)(480 * main_scale), window_flags);
+    SDL_Window* window = SDL_CreateWindow("Q's FO2 MAP.txt Level Extractor", (int)(640 * main_scale), (int)(480 * main_scale), window_flags);
     if (window == nullptr)
     {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
@@ -201,9 +201,6 @@ int main(int, char**)
             }
 
 
-
-
-
             if (event.type == SDL_EVENT_QUIT)
                 done = true;
             if (event.type == SDL_EVENT_KEY_DOWN) {
@@ -228,25 +225,21 @@ int main(int, char**)
         ImGui::NewFrame();
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        // if (show_demo_window)
+        //     ImGui::ShowDemoWindow(&show_demo_window);
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
             ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
-            ImGui::Begin("map.txt editor - ");
-            if (ImGui::Button("Demo Window")) {
-                show_demo_window = !show_demo_window;
-            }
+            ImGui::Begin("MAP.txt GUI", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
+            // if (ImGui::Button("Demo Window")) {
+            //     show_demo_window = !show_demo_window;
+            // }
 
             // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
             map_txt_gui();
-
-            // if (file_drop_frame) {
-            //     file_ptr = io_load_file(filename);
-            // }
 
             ImGui::End();
         }

@@ -134,6 +134,8 @@ bool map_txt_gui()
     ImVec2 size = ImGui::CalcTextSize("AAAAAAAAA");
     ImGui::PushItemWidth(size.x);
     static int header = -1;
+    #define PATH_SIZE           (MAX_PATH)
+    static char path_buff[PATH_SIZE] = "/path/to/some/folder/with/long/filename.cpp";
 
     ImGui::Text("Map Names:");
 
@@ -142,6 +144,7 @@ bool map_txt_gui()
     if (ImGui::Button(head_L, ImVec2{size.x,0})) {
         if (map_L.data) {
             snprintf(head_M, NAME_LENGTH, "%s##", map_L.map_name);
+            snprintf(path_buff, PATH_SIZE, "%s.Q.txt", map_L.file_str);
             header = 0;
         } else {
             strncpy(head_M,"HeaderL##",sizeof("HeaderL##"));
@@ -156,6 +159,7 @@ bool map_txt_gui()
     if (ImGui::Button(head_R, ImVec2{size.x,0})) {
         if (map_R.data) {
             snprintf(head_M, NAME_LENGTH, "%s##", map_R.map_name);
+            snprintf(path_buff, PATH_SIZE, "%s.Q.txt", map_R.file_str);
             header = 1;
         } else {
             strncpy(head_M,"HeaderR##",sizeof("HeaderR##"));
@@ -200,14 +204,38 @@ bool map_txt_gui()
     ImGui::PopItemWidth();
 
 
+    if (ImGui::BeginPopup("Overwrite?")) {
+        ImGui::Text("Don't save over the original files\n"
+                    "for now, I'm not sure they would\n"
+                    "be recoverable.");
+        ImGui::Text("File already exists, overwrite?");
+        if (ImGui::Button("Overwrite")) {
+            export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
 
     if (ImGui::Button("Export")) {
-        export_map_txt(label_ptr_M, &map_L, &map_R, header);
+        if (io_file_exists(path_buff)) {
+            ImGui::OpenPopup("Overwrite?");
+        } else {
+            export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
+        }
     }
     if (header == -1) {
         ImGui::SameLine();
         ImGui::Text("Pick a header first");
     }
+
+    ImGui::InputText("Path", path_buff, IM_COUNTOF(path_buff), ImGuiInputTextFlags_ElideLeft);
+
 
     return false;
 }
