@@ -134,6 +134,24 @@ char* parse_objects(map_lvls* map, int level)
                 continue;
             }
         }
+        if (io_strncmp(&map->objects[i], "[BEGIN INVEN ITEMS]", sizeof("[BEGIN INVEN ITEMS]")-1) == 0) {
+            // Apparently a critter's inventory is stored inside their own object description
+            // And those are all marked [OBJECT BEGIN], so it breaks the current parsing
+            // So here we fast forward to the end of the inventory list before returning to parsing
+            while (i < objects_size)
+            {
+                i++;
+                if (map->objects[i] != '[') {
+                    continue;
+                }
+                if (map->objects[i+1] != 'E') {
+                    continue;
+                }
+                if (io_strncmp(&map->objects[i], "[END INVEN ITEMS]", sizeof("[END INVEN ITEMS]")-1) == 0) {
+                    break;
+                }
+            }
+        }
         if (io_strncmp(&map->objects[i], "[OBJECT END]", sizeof("[OBJECT END]")-1) == 0) {
             if (begin == NULL) {
                 continue;
