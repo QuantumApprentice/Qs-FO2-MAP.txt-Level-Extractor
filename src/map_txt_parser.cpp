@@ -341,7 +341,7 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 
 
     /* spatial scripts have these extra fields */
-    // scr_id: 16777216     // ==> 0x01000000  ==> spatial script types
+    // scr_id: 16777216                     // ==> 0x01000000  ==> spatial script types
     // ...
     // scr_udata.sp.built_tile: 39999       // ==> highest tile number for level 0, starts at 0
     // scr_udata.sp.radius: 0
@@ -360,10 +360,10 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 
 
     //hooo boy, ok this guy is going to need a separate string for each script type
-    //  (just in case the scr_num entries need to be propperly tracked) (they do)
+    //      (just in case the scr_num entries need to be properly tracked) (they do)
     //  also spatial script type needs to be separated by which level they're located on
-    //  and then re-assigned to the new level for the new map
-    //also we need to make sure any scr_id/obj_sid pair don't overlap other pairs
+    //      and then re-assigned to the new level for the new map
+    //  also we need to make sure any scr_id/obj_sid pair don't overlap other pairs
 
 
     int scripts_size = map->objects - map->scripts;
