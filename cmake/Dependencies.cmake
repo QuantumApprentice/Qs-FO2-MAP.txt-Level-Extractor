@@ -16,14 +16,16 @@ FetchContent_Declare(
   GIT_SHALLOW    FALSE
 )
 
-FetchContent_Declare(
-  glad
-  GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-  GIT_TAG        73db193f853e2ee079bf3ca8a64aa2eaf6459043
-  GIT_SHALLOW    FALSE
+add_library(glad STATIC
+  ${CMAKE_SOURCE_DIR}/dependencies/glad1/src/glad.c
 )
 
-FetchContent_MakeAvailable(SDL3 glad)
+target_include_directories(glad
+  PUBLIC
+    ${CMAKE_SOURCE_DIR}/dependencies/glad1/include
+)
+
+FetchContent_MakeAvailable(SDL3 )
 
 FetchContent_GetProperties(imgui)
 

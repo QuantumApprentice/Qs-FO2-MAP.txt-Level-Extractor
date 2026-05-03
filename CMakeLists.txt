@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.25)
 project(QMAP_txt_editor LANGUAGES C CXX)
 
 set(EXE_NAME QMAP_txt_editor)
-set(EXE_NAME QMAP_txt_editor)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,26 +11,29 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(FetchContent)
 include(cmake/Dependencies.cmake)
 
-FetchContent_Declare(
-  IO_Platform
-  GIT_REPOSITORY https://github.com/QuantumApprentice/IO_platform.git
-  GIT_TAG        bdbb96384cc438b15126b642845e5971a022dc10
-  GIT_SHALLOW    FALSE
-)
+option(USE_LOCAL_IO_PLATFORM "Use local IO_Platform checkout" OFF)
+set(IO_PLATFORM_SOURCE_DIR "../IO_Platform" CACHE PATH "Path to local IO_Platform checkout")
 
-FetchContent_GetProperties(IO_Platform)
+if(USE_LOCAL_IO_PLATFORM)
+  add_subdirectory(
+    "${IO_PLATFORM_SOURCE_DIR}"
+    "${CMAKE_BINARY_DIR}/IO_Platform-build"
+  )
+else()
+  FetchContent_Declare(
+    IO_Platform
+    GIT_REPOSITORY https://github.com/Meleneth/IO_platform.git
+    GIT_TAG        6d7783d6d785752f590dd2ae5ac26845000e099e
+    GIT_SHALLOW    FALSE
+  )
 
-if(NOT io_platform_POPULATED)
-  FetchContent_Populate(IO_Platform)
+  FetchContent_MakeAvailable(IO_Platform)
 endif()
-
-message(STATUS "IO_Platform source dir: ${io_platform_SOURCE_DIR}")
 
 set(APP_SOURCES
   src/main.cpp
   src/map_txt_parser.cpp
   src/map_txt_gui.cpp
-  ${io_platform_SOURCE_DIR}/io_Platform.cpp
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -44,11 +46,6 @@ add_executable(${EXE_NAME}
   ${APP_SOURCES}
 )
 
-target_include_directories(${EXE_NAME}
-  PRIVATE
-    ${io_platform_SOURCE_DIR}
-)
-
 target_compile_definitions(${EXE_NAME}
   PRIVATE
     $<$<PLATFORM_ID:Windows>:WINDOWS>
@@ -59,6 +56,7 @@ find_package(OpenGL REQUIRED)
 
 target_link_libraries(${EXE_NAME}
   PRIVATE
+    IO_platform::IO_platform
     ImGui
     glad
     SDL3::SDL3
