@@ -1,0 +1,4 @@
+# Docs: https://git-scm.com/docs/gitattributes
+
+*.cpp text eol=lf
+*.h text eol=lf
