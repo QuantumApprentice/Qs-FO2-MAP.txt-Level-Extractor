@@ -1,113 +1,75 @@
 cmake_minimum_required(VERSION 3.25)
-project(QMAP_txt_editor LANGUAGES CXX)
+
+project(QMAP_txt_editor LANGUAGES C CXX)
+
+set(EXE_NAME QMAP_txt_editor)
+set(EXE_NAME QMAP_txt_editor)
+
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(EXE_NAME "QMAP_txt_editor")
-add_executable(${EXE_NAME})
-target_sources(
-    ${EXE_NAME} PRIVATE
-    src/main.cpp
-    src/map_txt_parser.cpp
-    src/map_txt_gui.cpp
-    dependencies/IO_Platform/io_Platform.cpp
+include(FetchContent)
+include(cmake/Dependencies.cmake)
+
+FetchContent_Declare(
+  IO_Platform
+  GIT_REPOSITORY https://github.com/QuantumApprentice/IO_platform.git
+  GIT_TAG        bdbb96384cc438b15126b642845e5971a022dc10
+  GIT_SHALLOW    FALSE
 )
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-target_compile_definitions(
-    ${EXE_NAME}
-    PUBLIC WINDOWS
-)
-elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-target_compile_definitions(
-    ${EXE_NAME}
-    PUBLIC LINUX
-)
+FetchContent_GetProperties(IO_Platform)
+
+if(NOT io_platform_POPULATED)
+  FetchContent_Populate(IO_Platform)
 endif()
 
-add_library(ImGui
-    dependencies/imgui-1.92.7/backends/imgui_impl_opengl3.h
-    dependencies/imgui-1.92.7/backends/imgui_impl_opengl3.cpp
-    dependencies/imgui-1.92.7/backends/imgui_impl_sdl3.h
-    dependencies/imgui-1.92.7/backends/imgui_impl_sdl3.cpp
-    dependencies/imgui-1.92.7/imgui.h
-    dependencies/imgui-1.92.7/imgui.cpp
-    dependencies/imgui-1.92.7/imgui_demo.cpp
-    dependencies/imgui-1.92.7/imgui_draw.cpp
-    dependencies/imgui-1.92.7/imgui_tables.cpp
-    dependencies/imgui-1.92.7/imgui_widgets.cpp
+message(STATUS "IO_Platform source dir: ${io_platform_SOURCE_DIR}")
+
+set(APP_SOURCES
+  src/main.cpp
+  src/map_txt_parser.cpp
+  src/map_txt_gui.cpp
+  ${io_platform_SOURCE_DIR}/io_Platform.cpp
 )
 
-# add_subdirectory(
-#     dependencies/glfw-3.4/              SYSTEM
-# )
-add_subdirectory(
-    dependencies/glad1/                 SYSTEM
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND APP_SOURCES
+    src/X11_drag_drop.cpp
+  )
+endif()
+
+add_executable(${EXE_NAME}
+  ${APP_SOURCES}
 )
 
-# find_package(
-#     SDL2 REQUIRED
-#     CONFIG REQUIRED
-#     COMPONENTS SDL2
-# )
-# find_package(
-#     SDL2 REQUIRED
-#     CONFIG COMPONENTS
-#     SDL2main
-# )
-# add_subdirectory(
-#     dependencies/SDL2-2.32.0/           SYSTEM
-# )
-# if (TARGET SDL2::SDL2main)
-#     target_link_libraries(
-#         ${EXE_NAME} PRIVATE
-#         SDL2::SDL2main
-#     )
-# endif()
+target_include_directories(${EXE_NAME}
+  PRIVATE
+    ${io_platform_SOURCE_DIR}
+)
+
+target_compile_definitions(${EXE_NAME}
+  PRIVATE
+    $<$<PLATFORM_ID:Windows>:WINDOWS>
+    $<$<PLATFORM_ID:Linux>:LINUX>
+)
 
 find_package(OpenGL REQUIRED)
-find_package(X11 REQUIRED)
-target_include_directories(
-    QMAP_txt_editor PRIVATE
-    ${X11_INCLUDE_DIR}
-)
-# target_link_libraries(
-#     QMAP_txt_editor PRIVATE
-#     glfw ${X11_LIBRARIES}
-# )
 
-
-
-##apparently SDL2 doesn't have drag hover
-# find_package(SDL2 REQUIRED)
-add_subdirectory(
-    dependencies/SDL3-3.4.2/
-)
-
-target_include_directories(
-    ImGui PUBLIC
-    dependencies/glfw-3.4/include/
-    dependencies/imgui-1.92.7/
-    dependencies/imgui-1.92.7/backends/
-    dependencies/IO_Platform/
-    # dependencies/SDL3-3.4.2/include/
-    # dependencies/SDL2-2.32.0/include/
-    # ${SDL2_INCLUDE_DIRS}
-)
-
-target_link_libraries(
-    ImGui PRIVATE
-    SDL3::SDL3
-)
-
-target_link_libraries(
-    ${EXE_NAME} PRIVATE
+target_link_libraries(${EXE_NAME}
+  PRIVATE
     ImGui
     glad
     SDL3::SDL3
-    # ${SDL2_LIBRARIES}
-    # SDL2::SDL2
-    # glfw
-    ${OPENGL_LIBRARIES}
-    X11::X11
+    OpenGL::GL
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_package(X11 REQUIRED)
+
+  target_link_libraries(${EXE_NAME}
+    PRIVATE
+      X11::X11
+  )
+endif()
