@@ -1,15 +1,37 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.30)
 project(QMAP_txt_editor LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
-
-set(EXE_NAME "QMAP_txt_editor")
+set(EXE_NAME QMAP_txt_editor)
 add_executable(${EXE_NAME})
+
+include(FetchContent)
+set(DEPS "dependencies")
+option(USE_TARBALL "Use extracted tarball vendored dependencies instead of git submodules" OFF)
+
+if(USE_TARBALL)
+    set(DEPS "vendor")
+    # apparently SDL2 doesn't have drag hover
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/SDL3/CMakeLists.txt")
+        message(SEND_ERROR "Unable to find ${CMAKE_SOURCE_DIR}/vendor/SDL3/ - Please extract from tarball")
+    endif()
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/IO_Platform/io_Platform.cpp")
+        message(SEND_ERROR "Unable to find ${CMAKE_SOURCE_DIR}/vendor/IO_platform/ - Please extract from tarball")
+    endif()
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/imgui/imgui.cpp")
+        message(SEND_ERROR "Unable to find ${CMAKE_SOURCE_DIR}/vendor/imgui/ - Please extract from tarball")
+    endif()
+endif()
+
+
 target_sources(
     ${EXE_NAME} PRIVATE
     src/main.cpp
     src/map_txt_parser.cpp
     src/map_txt_gui.cpp
-    dependencies/IO_Platform/io_Platform.cpp
+)
+target_sources(
+    ${EXE_NAME} PRIVATE
+    ${DEPS}/IO_Platform/io_Platform.cpp
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -25,89 +47,63 @@ target_compile_definitions(
 endif()
 
 add_library(ImGui
-    dependencies/imgui-1.92.7/backends/imgui_impl_opengl3.h
-    dependencies/imgui-1.92.7/backends/imgui_impl_opengl3.cpp
-    dependencies/imgui-1.92.7/backends/imgui_impl_sdl3.h
-    dependencies/imgui-1.92.7/backends/imgui_impl_sdl3.cpp
-    dependencies/imgui-1.92.7/imgui.h
-    dependencies/imgui-1.92.7/imgui.cpp
-    dependencies/imgui-1.92.7/imgui_demo.cpp
-    dependencies/imgui-1.92.7/imgui_draw.cpp
-    dependencies/imgui-1.92.7/imgui_tables.cpp
-    dependencies/imgui-1.92.7/imgui_widgets.cpp
+    ${DEPS}/imgui-1.92.7/backends/imgui_impl_opengl3.h
+    ${DEPS}/imgui-1.92.7/backends/imgui_impl_opengl3.cpp
+    ${DEPS}/imgui-1.92.7/backends/imgui_impl_sdl3.h
+    ${DEPS}/imgui-1.92.7/backends/imgui_impl_sdl3.cpp
+    ${DEPS}/imgui-1.92.7/imgui.h
+    ${DEPS}/imgui-1.92.7/imgui.cpp
+    ${DEPS}/imgui-1.92.7/imgui_demo.cpp         #TODO: remove this for final compile
+    ${DEPS}/imgui-1.92.7/imgui_draw.cpp
+    ${DEPS}/imgui-1.92.7/imgui_tables.cpp
+    ${DEPS}/imgui-1.92.7/imgui_widgets.cpp
 )
 
-# add_subdirectory(
-#     dependencies/glfw-3.4/              SYSTEM
-# )
-add_subdirectory(
-    dependencies/glad1/                 SYSTEM
-)
-
-# find_package(
-#     SDL2 REQUIRED
-#     CONFIG REQUIRED
-#     COMPONENTS SDL2
-# )
-# find_package(
-#     SDL2 REQUIRED
-#     CONFIG COMPONENTS
-#     SDL2main
-# )
-# add_subdirectory(
-#     dependencies/SDL2-2.32.0/           SYSTEM
-# )
-# if (TARGET SDL2::SDL2main)
-#     target_link_libraries(
-#         ${EXE_NAME} PRIVATE
-#         SDL2::SDL2main
-#     )
-# endif()
-
-find_package(OpenGL REQUIRED)
-find_package(X11 REQUIRED)
-target_include_directories(
-    QMAP_txt_editor PRIVATE
-    ${X11_INCLUDE_DIR}
-)
-# target_link_libraries(
-#     QMAP_txt_editor PRIVATE
-#     glfw ${X11_LIBRARIES}
-# )
-
-
-
-##apparently SDL2 doesn't have drag hover
-# find_package(SDL2 REQUIRED)
-add_subdirectory(
-    dependencies/SDL3-3.4.2/
-)
+add_subdirectory(${DEPS}/glad1/)
+add_subdirectory(${DEPS}/SDL3-3.4.2/)
 
 target_include_directories(
     ImGui PUBLIC
-    dependencies/glfw-3.4/include/
-    dependencies/imgui-1.92.7/
-    dependencies/imgui-1.92.7/backends/
-    dependencies/IO_Platform/
-    # dependencies/SDL3-3.4.2/include/
-    # dependencies/SDL2-2.32.0/include/
-    # ${SDL2_INCLUDE_DIRS}
+    ${DEPS}/glfw-3.4/include/
+    ${DEPS}/imgui-1.92.7/
+    ${DEPS}/imgui-1.92.7/backends/
+    ${DEPS}/IO_Platform/
 )
 
+# ImGui needs its own SDL3 links
 target_link_libraries(
     ImGui PRIVATE
     SDL3::SDL3
 )
-
+find_package(OpenGL REQUIRED)
 target_link_libraries(
     ${EXE_NAME} PRIVATE
     ImGui
     glad
     SDL3::SDL3
-    # ${SDL2_LIBRARIES}
-    # SDL2::SDL2
-    # glfw
-    ${OPENGL_LIBRARIES}
-    X11::X11
+    OpenGL::GL
 )
 
+
+set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-source")
+
+set(CPACK_SOURCE_IGNORE_FILES
+  "/\\.git/"
+  "/_build/"
+  "/build/"
+  "/build-.*/"
+  "/out/"
+  "/\\.vs/"
+  "/\\.vscode/"
+  "/vendor-source-package/"
+  "/CMakeFiles/"
+  "/CMakeCache\\.txt$"
+  "/\\.ninja_log$"
+  "/\\.ninja_deps$"
+  "/_CPack_Packages/"
+  "/CPackConfig\\.cmake$"
+  "/CPackSourceConfig\\.cmake$"
+)
+
+include(CPack)
