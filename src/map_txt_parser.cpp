@@ -234,7 +234,7 @@ int script_spatial(char* script_txt, int remainder, int level)
 bool check_object_level(char* id, char* objects)
 {
     int id_len = 0;
-    while ((id[id_len] >= '0') and id[id_len] <= '9') {
+    while ((id[id_len] >= '0') && id[id_len] <= '9') {
         id_len++;
     }
 
