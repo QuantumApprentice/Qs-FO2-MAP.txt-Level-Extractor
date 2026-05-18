@@ -11,7 +11,7 @@ examples/*/Release/*
 examples/*/x64/*
 
 ## Commonly used CMake directories & CMake CPM cache
-build*/
+build/
 .cache
 
 ## VS code artifacts
