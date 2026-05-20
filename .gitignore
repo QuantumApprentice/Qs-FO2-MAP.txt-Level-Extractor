@@ -16,7 +16,8 @@ build/
 
 ## VS code artifacts
 .vscode/
-.git
+.git/
+.vs/
 
 ## Unix executables from our example Makefiles
 examples/example_apple_metal/example_apple_metal

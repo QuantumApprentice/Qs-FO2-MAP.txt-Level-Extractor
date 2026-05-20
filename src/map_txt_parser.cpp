@@ -272,7 +272,7 @@ int script_object(char* script_txt, int remainder, int level, char* objects)
     return 0;
 }
 
-
+#define uint  unsigned int
 struct parsed_scripts
 {
     char* scr_num[5]   = {0};

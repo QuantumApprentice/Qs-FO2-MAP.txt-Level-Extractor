@@ -44,10 +44,10 @@ void file_drop_callback(const char* full_path)
         return;
     }
 
-    char* file_name   = NULL;
+    char* file_path   = NULL;
     int len = strlen(full_path) + 1;
-    file_name = (char*)malloc(len);
-    memcpy(file_name, full_path, len);
+    file_path = (char*)malloc(len);
+    memcpy(file_path, full_path, len);
 
 
     map_lvls* map_ptr = NULL;
@@ -63,13 +63,13 @@ void file_drop_callback(const char* full_path)
         free(map_ptr->file_str);
         memset(map_ptr,0,sizeof(*map_ptr));
     }
-    file_info* file   = io_load_file(file_name);
-    map_ptr->file_str = file_name;
+    file_info* file   = io_load_file(file_path);
+    map_ptr->file_str = file_path;
     map_ptr->file_siz = file->size;
     map_ptr->data     = file->data;
     free(file);
 
-    map_ptr->map_name = strrchr(file_name,'/')+1;
+    map_ptr->map_name = io_get_filename_from_path(file_path);
 
     parse_map_txt(map_ptr->data, map_ptr);
     update_labels(map_ptr, list_box);
@@ -135,7 +135,7 @@ bool map_txt_gui()
     ImGui::PushItemWidth(size.x);
     static int header = -1;
     #define PATH_SIZE           (MAX_PATH)
-    static char path_buff[PATH_SIZE] = "/path/to/some/folder/with/long/filename.cpp";
+    static char path_buff[PATH_SIZE] = "/path/to/some/folder/with/long/mapname.txt";
 
     ImGui::Text("Map Names:");
 
