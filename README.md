@@ -6,6 +6,7 @@ This will allow the user to
 > insert map levels,<br>
 <br>
 and maybe other stuff, dunno yet.
+<img width="637" height="506" alt="image" src="https://github.com/user-attachments/assets/46426cd7-fa3a-424e-90ba-97a141415498" />
 
 This tool should do the job of 
 - extracting a map level from a Fallout 2 "map.txt" file, 
