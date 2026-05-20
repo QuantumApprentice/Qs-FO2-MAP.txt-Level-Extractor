@@ -5,7 +5,7 @@ project(${EXE_NAME} LANGUAGES CXX)
 
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    add_executable(${EXE_NAME} WIN32)   #makes program open without dos window
+    add_executable(${EXE_NAME} WIN32)   # WIN32 makes program open without dos window
     set_target_properties(
         ${EXE_NAME} PROPERTIES
         LINK_FLAGS "/ENTRY:mainCRTStartup"
