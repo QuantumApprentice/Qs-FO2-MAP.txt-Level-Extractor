@@ -17,7 +17,7 @@ bool open_err_popup = false;
 
 map_lvls map_L;
 map_lvls map_R;
-char label_M[3][16] = {"empty"};
+char label_M[3][16] = {"empty", "##1", "##2"};
 char head_L[NAME_LENGTH] = {"empty##1"};
 char head_M[NAME_LENGTH] = {"empty##2"};
 char head_R[NAME_LENGTH] = {"empty##3"};
@@ -30,6 +30,8 @@ void update_labels(map_lvls* map, int list_box)
     snprintf((list_box == 0) ? head_L : head_R, NAME_LENGTH, "%s", map->map_name);
     memset(label_M,0,sizeof(label_M));
     strncpy(label_M[0],"empty",sizeof("empty"));
+    strncpy(label_M[1],"##1",  sizeof("##1"));
+    strncpy(label_M[2],"##2",  sizeof("##2"));
 
     for (size_t i = 0; i < 3; i++) {
         map->label_ptr[i] = map->label[i];
@@ -168,12 +170,12 @@ bool map_txt_gui()
             strncpy(head_M,"HeaderL##",sizeof("HeaderL##"));
         }
     }
-    ImGui::SetCursorPos(ImVec2{posA.x+size.x   + 40, posA.y});
+    ImGui::SetCursorPos(ImVec2{posA.x+size.x   + 60, posA.y});
     if (ImGui::Button(head_M, ImVec2{size.x,0})) {
         header = -1;
         strncpy(head_M,"empty",sizeof("empty"));
     }
-    ImGui::SetCursorPos(ImVec2{posA.x+size.x*2 + 80, posA.y});
+    ImGui::SetCursorPos(ImVec2{posA.x+size.x*2 + 120, posA.y});
     if (ImGui::Button(head_R, ImVec2{size.x,0})) {
         if (map_R.data) {
             snprintf(head_M, NAME_LENGTH, "%s##", map_R.map_name);
@@ -190,31 +192,45 @@ bool map_txt_gui()
 
 
     // left third
-    ImGui::ListBox("##L", &selection[0], map_L.label_ptr, IM_COUNTOF(map_L.label_ptr));
+    ImGui::ListBox("##L", &selection[LEFT], map_L.label_ptr, IM_COUNTOF(map_L.label_ptr));
     if (hover_box()) {
         list_box = 0;
     }
 
     ImGui::SetCursorPos(ImVec2{posB.x+size.x   +  5, posB.y});
-    if (ImGui::Button(">##L->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
+    if (ImGui::Button(">##L->M", ImVec2{50,ImGui::GetItemRectSize().y})) {
         // replace middle selection with selection on left
         strncpy(label_M[selection[MIDDLE]],map_L.label_ptr[selection[LEFT]],NAME_LENGTH);
     }
 
-    // middle third
+    // middle third - output listbox
+    // this uses listbox internals so I can clear an entry on double-click
     char* label_ptr_M[] = {label_M[0],label_M[1],label_M[2]};
-    ImGui::SetCursorPos(ImVec2{posB.x+size.x   + 40, posB.y});
-    ImGui::ListBox("##M", &selection[1], label_ptr_M, IM_COUNTOF(label_ptr_M));
+    ImGui::SetCursorPos(ImVec2{posB.x+size.x+20   + 40, posB.y});
+    if (ImGui::BeginListBox("##M", {size.x,ImGui::GetItemRectSize().y}))
+    {
+        for (int n = 0; n < IM_COUNTOF(label_ptr_M); n++)
+        {
+            const bool item_selected = (n == selection[MIDDLE]);
+            if (ImGui::Selectable(label_M[n], item_selected))
+                selection[MIDDLE] = n;
 
-    ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 45, posB.y});
-    if (ImGui::Button("<##R->M", ImVec2{30,ImGui::GetItemRectSize().y})) {
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                snprintf(label_M[selection[MIDDLE]], NAME_LENGTH, "##%d", n);
+            }
+        }
+        ImGui::EndListBox();
+    }
+
+    ImGui::SetCursorPos(ImVec2{posB.x+size.x*2+20 + 45, posB.y});
+    if (ImGui::Button("<##R->M", ImVec2{50,ImGui::GetItemRectSize().y})) {
         // replace middle selection with selection on right
         strncpy(label_M[selection[MIDDLE]],map_R.label_ptr[selection[RIGHT]],NAME_LENGTH);
     }
 
     // right third
-    ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 80, posB.y});
-    ImGui::ListBox("##R", &selection[2], map_R.label_ptr, IM_COUNTOF(map_R.label_ptr));
+    ImGui::SetCursorPos(ImVec2{posB.x+size.x*2 + 120, posB.y});
+    ImGui::ListBox("##R", &selection[RIGHT], map_R.label_ptr, IM_COUNTOF(map_R.label_ptr));
     if (hover_box()) {
         list_box = 1;
     }
