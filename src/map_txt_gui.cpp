@@ -4,8 +4,11 @@
 #include "map_txt_parser.h"
 
 
-bool is_hovering = false;
-int list_box     = -1;
+bool is_hovering     = false;
+int list_box         = -1;
+#define ERR_TXT_LEN     (256)
+char error_text[ERR_TXT_LEN] = {};
+bool open_err_popup = false;
 
 #define NAME_LENGTH     (16)
 #define LEFT            (0)
@@ -40,7 +43,22 @@ void update_labels(map_lvls* map, int list_box)
 
 void file_drop_callback(const char* full_path)
 {
+    // not hovering over one of the boxes
     if (list_box == -1) {
+        return;
+    }
+    // make sure file type is .txt
+    char* ext = io_get_file_extension(full_path);
+    if (io_strncasecmp(ext, "txt", 3) != 0) {
+        snprintf(error_text, ERR_TXT_LEN,
+        "Wrong file type.\n"
+        "Should be Fallout 2 'map.txt'.\n"
+        "You can export a single map.txt\n"
+        "from the Fallout 2 Mapper\n"
+        "by opening the map you want\n"
+        "to export and pressing 'Alt + P'."
+        );
+        open_err_popup = true;
         return;
     }
 
@@ -203,6 +221,19 @@ bool map_txt_gui()
 
     ImGui::PopItemWidth();
 
+    if (open_err_popup) {
+        ImGui::OpenPopup("Error");
+        open_err_popup = false;
+    }
+
+    if (ImGui::BeginPopup("Error")) {
+        ImGui::Text("%s", error_text);
+
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 
     if (ImGui::BeginPopup("Overwrite?")) {
         ImGui::Text("Don't save over the original files\n"

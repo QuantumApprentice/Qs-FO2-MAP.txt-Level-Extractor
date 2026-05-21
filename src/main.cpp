@@ -37,7 +37,6 @@ void file_drop_callback_SDL3(SDL_Event event)
 {
     //SDL3 version
     //apparently SDL only drops one file at a time?
-    //TODO: make sure file type is .txt
     const char* file = event.drop.data;
     file_drop_callback(file);
 
