@@ -10,7 +10,7 @@ char* find_str(uint8_t* map_txt, char* str, int len)
     //      has a "\0" terminator so string parsing works
     //      else use map.file_siz
     //TODO: just make this a normal find_string function
-    char* str_start = NULL;
+    char* str_start = nullptr;
     char* map_str   = (char*)map_txt;
     int map_len     = strlen(map_str);
     int str_len     = len;
@@ -61,7 +61,7 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
 //so we have to check each one in turn
 void map_level_sizes(map_lvls* map)
 {
-    // char* end = NULL;
+    // char* end = nullptr;
     if (map->level[0]) {
         if (map->level[1]) {
             char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
@@ -111,8 +111,8 @@ void map_level_sizes(map_lvls* map)
 // returns a string of all objects located on the level passed in
 char* parse_objects(map_lvls* map, int level)
 {
-    char* begin = NULL;
-    char* end   = NULL;
+    char* begin = nullptr;
+    char* end   = nullptr;
     int objects_size = map->file_siz - (map->objects - (char*)map->data);
     char* objects_str = (char*)malloc(objects_size);
     char* objects_ptr = objects_str;
@@ -130,7 +130,7 @@ char* parse_objects(map_lvls* map, int level)
             char l = level + '0';
             char o = map->objects[i + sizeof("obj_elev: ")-1];
             if (o != l) {
-                begin = NULL;
+                begin = nullptr;
                 continue;
             }
         }
@@ -153,7 +153,7 @@ char* parse_objects(map_lvls* map, int level)
             }
         }
         if (io_strncmp(&map->objects[i], "[OBJECT END]", sizeof("[OBJECT END]")-1) == 0) {
-            if (begin == NULL) {
+            if (begin == nullptr) {
                 continue;
             }
             end = &map->objects[i + sizeof("[OBJECT END]") + 3];
@@ -163,7 +163,7 @@ char* parse_objects(map_lvls* map, int level)
         }
     }
 
-    objects_ptr[0] = '\0'; // null terminate the string
+    objects_ptr[0] = '\0'; // nullptr terminate the string
 
     return objects_str;
 }
@@ -372,7 +372,7 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 
     for (size_t type = 0; type < 5; type++) {
         if ((type == SCRIPT_SYSTEM) || (type == SCRIPT_TIMED)) {
-            scrs.scr_num[type] = NULL;
+            scrs.scr_num[type] = nullptr;
             continue;
         }
         scrs.scr_num[type] = (char*)malloc(scripts_size);
@@ -453,7 +453,7 @@ parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 
 void check_char_scripts(parsed_scripts* scripts, char** objects, script_type type)
 {
-    char* script_ptr = NULL;
+    char* script_ptr = nullptr;
     uint scr_id = 0;
     uint max_id = 0;
 

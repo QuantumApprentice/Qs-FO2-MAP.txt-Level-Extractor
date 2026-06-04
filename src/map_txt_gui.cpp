@@ -2,6 +2,7 @@
 #include "io_Platform.h"
 #include "map_txt_gui.h"
 #include "map_txt_parser.h"
+#include "map_map_parser.h"
 
 
 bool is_hovering     = false;
@@ -43,6 +44,7 @@ void update_labels(map_lvls* map, int list_box)
     }
 }
 
+
 void file_drop_callback(const char* full_path)
 {
     // not hovering over one of the boxes
@@ -51,7 +53,14 @@ void file_drop_callback(const char* full_path)
     }
     // make sure file type is .txt
     char* ext = io_get_file_extension(full_path);
-    if (io_strncasecmp(ext, "txt", 3) != 0) {
+
+    bool is_map_file = false;
+    if (io_strncasecmp(ext, "txt", 3) == 0) {
+        //currently do nothing
+    } else
+    if (io_strncasecmp(ext, "map", 3) == 0) {
+        is_map_file = true;
+    } else {
         snprintf(error_text, ERR_TXT_LEN,
         "Wrong file type.\n"
         "Should be Fallout 2 'map.txt'.\n"
@@ -89,11 +98,17 @@ void file_drop_callback(const char* full_path)
     map_ptr->data     = file->data;
     free(file);
 
-    map_ptr->map_name = io_get_filename_from_path(file_path);
+    map_ptr->map_name    = io_get_filename_from_path(file_path);
+    map_ptr->is_map_file = is_map_file;
 
-    parse_map_txt(map_ptr->data, map_ptr);
+
+    if (map_ptr->is_map_file) {
+        parse_map_map(map_ptr);
+    } else {
+        parse_map_txt(map_ptr->data, map_ptr);
+        map_level_sizes(map_ptr);
+    }
     update_labels(map_ptr, list_box);
-    map_level_sizes(map_ptr);
 
     list_box = -1;
 }

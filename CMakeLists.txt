@@ -42,12 +42,13 @@ if(USE_TARBALL)
     endif()
 endif()
 
-
 target_sources(
     ${EXE_NAME} PRIVATE
     src/main.cpp
-    src/map_txt_parser.cpp
     src/map_txt_gui.cpp
+    src/map_txt_parser.cpp
+    src/map_map_parser.cpp
+    src/B_Endian/B_Endian.cpp
 )
 target_sources(
     ${EXE_NAME} PRIVATE
