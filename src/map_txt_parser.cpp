@@ -61,17 +61,14 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
 //so we have to check each one in turn
 void map_level_sizes(map_lvls* map)
 {
-    // char* end = nullptr;
     if (map->level[0]) {
         if (map->level[1]) {
             char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
             map->lvl_sizes[0] = end - map->level[0];
-            // map->lvl_sizes[0] = map->level[1] - map->level[0];
         } else
         if (map->level[2]) {
             char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
             map->lvl_sizes[0] = end - map->level[0];
-            // map->lvl_sizes[0] = map->level[2] - map->level[0];
         } else {
             map->lvl_sizes[0] = map->scripts  - map->level[0];
         }
@@ -80,7 +77,6 @@ void map_level_sizes(map_lvls* map)
         if (map->level[2]) {
             char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
             map->lvl_sizes[1] = end - map->level[1];
-            // map->lvl_sizes[1] = map->level[2] - map->level[1];
         } else {
             map->lvl_sizes[1] = map->scripts  - map->level[1];
         }
@@ -92,7 +88,6 @@ void map_level_sizes(map_lvls* map)
     if (map->level[0]) {
         char* end = find_str(map->data, "square_elev: 0\r\n\r\n", strlen("square_elev: 0\r\n\r\n"));
         map->header_size = end - (char*)map->data;
-        // map->header_size = (uint64_t)(map->level[0] - (char*)map->data);
     } else
     if (map->level[1]) {
         char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
@@ -294,14 +289,6 @@ struct spatial_script
 };
 
 
-
-enum script_type {
-    SCRIPT_SYSTEM  = 0x0,
-    SCRIPT_SPATIAL = 0x1,
-    SCRIPT_TIMED   = 0x2,
-    SCRIPT_OBJECTS = 0x3,
-    SCRIPT_CRITTER = 0x4,
-};
 
 parsed_scripts parse_scripts(map_lvls* map, char* objects, int level)
 {
