@@ -123,11 +123,13 @@ void drag_file(ImVec2 pos)
 }
 void drag_dropped()
 {
+    //QTODO: some cleanup might be necessary here
+    //       this seems to be called multiple times from multiple places
     is_hovering = false;
 
     ImGuiIO& io = ImGui::GetIO();
     io.MouseDown[0] = false;
-    list_box = -1;
+    // list_box = -1;
 }
 
 // kind of dumb, but...
@@ -160,9 +162,55 @@ bool hover_box()
     return false;
 }
 
+void export_map(char** label_ptr_M, int header, char* path_buff)
+{
+    if (map_L.is_map_file && map_R.is_map_file) {
+        // .map file extension for both maps
+        export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff);
+    } else
+    if(!map_L.is_map_file && !map_R.is_map_file) {
+        // .txt file extension for both maps
+        export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
+    } else {
+        open_err_popup = true;
+        snprintf(error_text, ERR_TXT_LEN,
+            "Sorry, can't mix .MAP and .TXT yet.\n"
+            "It's just a pain in the butt to\n"
+            "combine these two filetypes,\n"
+            "so I'm leaving this out for now.\n"
+            "Let me know if you want this!"
+        );
+    }
+}
+
+
+void error_popup()
+{
+    ImGui::Text("%s", error_text);
+
+    if (ImGui::Button("Close")) {
+        ImGui::CloseCurrentPopup();
+    }
+}
+void overwrite_popup(char** label_ptr_M, int header, char* path_buff)
+{
+    ImGui::Text("Don't save over the original files\n"
+                "for now, I'm not sure they would\n"
+                "be recoverable.");
+    ImGui::Text("File already exists, overwrite?");
+    if (ImGui::Button("Overwrite")) {
+        export_map(label_ptr_M, header, path_buff);
+        // export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        ImGui::CloseCurrentPopup();
+    }
+}
 
 // gui interface for the whole map_txt editor
-// divided into thirds, a left map, a right map, 
+// divided into thirds, a left map, a right map,
 // and the new map in the middle
 bool map_txt_gui()
 {
@@ -258,37 +306,20 @@ bool map_txt_gui()
     }
 
     if (ImGui::BeginPopup("Error")) {
-        ImGui::Text("%s", error_text);
-
-        if (ImGui::Button("Close")) {
-            ImGui::CloseCurrentPopup();
-        }
+        error_popup();
         ImGui::EndPopup();
     }
 
     if (ImGui::BeginPopup("Overwrite?")) {
-        ImGui::Text("Don't save over the original files\n"
-                    "for now, I'm not sure they would\n"
-                    "be recoverable.");
-        ImGui::Text("File already exists, overwrite?");
-        if (ImGui::Button("Overwrite")) {
-            export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-
+        overwrite_popup(label_ptr_M, header, path_buff);
         ImGui::EndPopup();
     }
-
 
     if (ImGui::Button("Export")) {
         if (io_file_exists(path_buff)) {
             ImGui::OpenPopup("Overwrite?");
         } else {
-            export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
+            export_map(label_ptr_M, header, path_buff);
         }
     }
     if (header == -1) {
