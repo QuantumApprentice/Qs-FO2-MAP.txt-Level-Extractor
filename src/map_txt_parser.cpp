@@ -1,3 +1,4 @@
+//https://falloutmods.fandom.com/wiki/Merging_maps
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -779,7 +780,6 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
                 if (i == SCRIPT_SPATIAL) {
                     for (size_t cnt = 0; cnt < scripts[elevation].scr_num_cnt[i]; cnt++)
                     {
-                        // printf(
                         snprintf(
                             out_ptr, out_size - (out_ptr - (char*)out_map),
                             "\r\n"

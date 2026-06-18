@@ -54,12 +54,12 @@ void file_drop_callback(const char* full_path)
     // make sure file type is .txt
     char* ext = io_get_file_extension(full_path);
 
-    bool is_map_file = false;
+    int map_type = EMPTY;
     if (io_strncasecmp(ext, "txt", 3) == 0) {
-        //currently do nothing
+        map_type = MAP_TXT;
     } else
     if (io_strncasecmp(ext, "map", 3) == 0) {
-        is_map_file = true;
+        map_type = MAP_MAP;
     } else {
         snprintf(error_text, ERR_TXT_LEN,
         "Wrong file type.\n"
@@ -98,18 +98,19 @@ void file_drop_callback(const char* full_path)
     map_ptr->data     = file->data;
     free(file);
 
-    map_ptr->map_name    = io_get_filename_from_path(file_path);
-    map_ptr->is_map_file = is_map_file;
+    map_ptr->map_name = io_get_filename_from_path(file_path);
+    map_ptr->map_type = map_type;
 
 
-    if (map_ptr->is_map_file) {
+    if (map_ptr->map_type == MAP_MAP) {
         parse_map_map(map_ptr);
-    } else {
+    } else
+    if (map_ptr->map_type == MAP_TXT) {
         parse_map_txt(map_ptr->data, map_ptr);
         map_level_sizes(map_ptr);
     }
     update_labels(map_ptr, list_box);
-
+    //QTODO: is this necessary? why did I mark it in the debugger?
     list_box = -1;
 }
 
@@ -164,12 +165,21 @@ bool hover_box()
 
 void export_map(char** label_ptr_M, int header, char* path_buff)
 {
-    if (map_L.is_map_file && map_R.is_map_file) {
-        // .map file extension for both maps
+    if (map_L.data == nullptr && map_R.data == nullptr) {
+        return;
+    }
+    if (map_L.map_type == EMPTY && map_R.map_type == EMPTY) {
+        return;
+    }
+
+    // .map file extension for both maps or one .map and one empty
+    if ((map_L.map_type == MAP_MAP || map_L.map_type == EMPTY)
+    &&  (map_R.map_type == MAP_MAP || map_R.map_type == EMPTY)) {
         export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff);
     } else
-    if(!map_L.is_map_file && !map_R.is_map_file) {
-        // .txt file extension for both maps
+    // .txt file extension for both maps or one .txt and one empty
+    if ((map_L.map_type == MAP_TXT || map_L.map_type == EMPTY)
+    &&  (map_R.map_type == MAP_TXT || map_R.map_type == EMPTY)) {
         export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
     } else {
         open_err_popup = true;
@@ -199,6 +209,7 @@ void overwrite_popup(char** label_ptr_M, int header, char* path_buff)
                 "be recoverable.");
     ImGui::Text("File already exists, overwrite?");
     if (ImGui::Button("Overwrite")) {
+        //QTODO: this needs to work for both types
         export_map(label_ptr_M, header, path_buff);
         // export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
         ImGui::CloseCurrentPopup();

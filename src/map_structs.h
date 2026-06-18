@@ -9,6 +9,11 @@ enum script_type {
     SCRIPT_OBJECTS = 0x3,
     SCRIPT_CRITTER = 0x4,
 };
+enum map_type {
+    EMPTY          = 0,
+    MAP_TXT        = 1,
+    MAP_MAP        = 2
+};
 
 struct map_header
 {
@@ -24,12 +29,12 @@ struct map_header
     int32_t mvar_cnt;       // 0x0030 // Number of global variables stored in map. (maybe this means map_vars?)
     int32_t map_id;         // 0x0034 // Fallout 1: Map filename found in map.msg, Fallout 2: Map details found in data/maps.txt in section [Map id]
     uint32_t game_ticks;    // 0x0038 // Time since the epoch. Number of time ticks since the epoch. A time tick is equivalent to 0.1 seconds in game time. The epoch for Fallout 1 is "5 December 2161 00:00am", and for Fallout 2 "25 July 2241 00:00am". 
-    int32_t unknown[4*44];  // 0x003C // QTODO: let's hope I don't have to figure this out
+    int32_t unknown[44];    // 0x003C // QTODO: let's hope I don't have to figure this out
 };
 
 struct map_lvls
 {
-    bool is_map_file = false;
+    int   map_type   = 0;
     char* file_str   = nullptr;
     int   file_siz   = 0;     //should not be more than a couple MBs ever
     char* map_name   = nullptr;
