@@ -1,4 +1,5 @@
 // https://falloutmods.fandom.com/wiki/MAP_File_Format
+// https://fodev.net/files/fo2/map.html
 #include <memory.h>
 #include <math.h>
 #include "map_map_parser.h"
@@ -142,9 +143,6 @@ struct objects_list
 {
     int32_t count_total;
     int32_t count_elev[3];
-    // int32_t count_lvl_0;
-    // int32_t count_lvl_1;
-    // int32_t count_lvl_2;
     object* objects;
 };
 
@@ -278,44 +276,29 @@ int32_t read_adv(map_lvls* map, int* offset)
 
 scripts_list parse_map_scripts(map_lvls* map, int* offset)
 {
-    // int offset = 236 + (map->header.mvar_cnt + map->header.lvar_cnt) * sizeof(int32_t);
-    // if (!(map->header.map_flags & MAP_ELEV_0)) {
-    //     offset += 10000*sizeof(int32_t);
-    // }
-    // if (!(map->header.map_flags & MAP_ELEV_1)) {
-    //     offset += 10000*sizeof(int32_t);
-    // }
-    // if (!(map->header.map_flags & MAP_ELEV_2)) {
-    //     offset += 10000*sizeof(int32_t);
-    // }
-
-
     scripts_list scripts[5];
     for (int type = SCRIPT_SYSTEM; type <= SCRIPT_CRITTER; type++) {
-        // scripts[type].count = B_Endian::read_i32(data_ptr);
         scripts[type].count = read_adv(map, offset);
+
+
+        //debugging bullshit
+        uint8_t* start_of_scrs = &map->data[*offset];
+        int start_offset = *offset;
+        int this_offset  = 0;
+        //------------------
 
         int check = 0;
         if (scripts[type].count > 0) {
 
 
-            int mod_count = ceil(scripts[type].count % 16);
-
-
-
-            // int scr_count = B_Endian::read_i32(&data_ptr[0x00]);
-            // int scr_len   = B_Endian::read_i32(&data_ptr[0x04]);
+            // int mod_count = ceil(scripts[type].count % 16);
             int total_cnt = ceil(scripts[type].count / 16.0f) * 16;
 
-            // scripts[type].scripts = (script*)calloc(1, scripts[type].count * sizeof(script));
             scripts[type].scripts = (script*)calloc(1, total_cnt * sizeof(script));
-            // for (int j = 0; j < scripts[type].count; j++) {
             for (int j = 0; j < total_cnt; j++) {
         uint8_t* data_ptr = &map->data[*offset];
         script* scr_ptr = &scripts[type].scripts[j];
-                // scripts[type].scripts[j].scr_id         = B_Endian::read_i32(&data_ptr[0x00]); // 0x00  Packed script id.
                 scripts[type].scripts[j].scr_id         = read_adv(map, offset); // 0x00  Packed script id.
-                // scripts[type].scripts[j].scr_next       = B_Endian::read_i32(&data_ptr[0x04]); // 0x04  Linked-list field in the original engine; usually no
                 scripts[type].scripts[j].scr_next       = read_adv(map, offset); // 0x04  Linked-list field in the original engine; usually no
 
                 if (type == SCRIPT_SYSTEM) {
@@ -323,17 +306,18 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
                 }
                 if (type == SCRIPT_SPATIAL) {
                     // Only present for spatial scripts.
-                    // scripts[type].scripts[j].spatial_tile   = B_Endian::read_i32(&data_ptr[0x08]); // 0x08  Packed tile/elevation value
                     scripts[type].scripts[j].spatial_tile   = read_adv(map, offset); // 0x08  Packed tile/elevation value
-                    // scripts[type].scripts[j].spatial_radius = B_Endian::read_i32(&data_ptr[0x0C]); // 0x0C  Spatial trigger radius.
                     scripts[type].scripts[j].spatial_radius = read_adv(map, offset); // 0x0C  Spatial trigger radius.
-                    // data_ptr += 8;
                 }
                 if (type == SCRIPT_TIMED) {
-                    // Only present for timed scripts.
-                    // scripts[type].scripts[j].time           = B_Endian::read_i32(&data_ptr[0x08]); // 0x08  Game-time value for the timed script (Savegame only?)
-                    scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script (Savegame only?)
-                    // data_ptr += 4;
+                    // Only present for timed scripts. (Savegame only?)
+                    scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script
+                }
+                if (type == SCRIPT_OBJECTS) {
+                    // do nothing, already the right size?
+                }
+                if (type == SCRIPT_CRITTER) {
+                    // also do nothing?
                 }
 
                 // After the optional spatial/timed fields,
@@ -355,36 +339,34 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
                 scripts[type].scripts[j].unknown_2      = read_adv(map, offset); // 0x44  also unknown
 
                 if ((j % 16) == 15) {
-                    check += read_adv(map, offset);
+                    int abc = read_adv(map, offset);
+                    if (abc != 16) {
+                        this_offset = *offset;
+                    }
+                    if (abc > 16) {
+                        for (int i = 0; i < 16; i++)
+                        {
+                            int thafuck = read_adv(map, offset);
+                            printf("%d thafuck: %d\n", i, thafuck);
+                        }
+                    }
+                    // check += read_adv(map, offset);
+                    check += abc;
+                    printf("check: %d\n", check);
+                    int wtf = read_adv(map, offset);
+                    if (wtf != 0) {
+                        printf("wtf found a weird number: %d\n", wtf);
+                    }
                 }
 
-                printf("delete me\n");  //QTODO: delete this line
-
-                // scripts[type].scripts[j].scr_flags      = B_Endian::read_i32(&data_ptr[0x10]); // 0x10  (0 in maps, value in saves)
-                // scripts[type].scripts[j].scr_index      = B_Endian::read_i32(&data_ptr[0x14]); // 0x14  Script id. Script filename is found in LST file scri
-                // scripts[type].scripts[j].program_ptr    = B_Endian::read_i32(&data_ptr[0x18]); // 0x18  not used?
-                // scripts[type].scripts[j].scr_obj_id     = B_Endian::read_i32(&data_ptr[0x1C]); // 0x1C  Object id for this script
-                // scripts[type].scripts[j].lvar_offset    = B_Endian::read_i32(&data_ptr[0x20]); // 0x20  Offset into lvars data struct from earlier
-                // scripts[type].scripts[j].lvar_cnt       = B_Endian::read_i32(&data_ptr[0x24]); // 0x24  (0 in maps, value in saves?)
-                // scripts[type].scripts[j].last_used_val  = B_Endian::read_i32(&data_ptr[0x28]); // 0x28  possibly used for savegames?
-                // scripts[type].scripts[j].current_action = B_Endian::read_i32(&data_ptr[0x2C]); // 0x2C  possibly used for savegames?
-                // scripts[type].scripts[j].fixed_param    = B_Endian::read_i32(&data_ptr[0x30]); // 0x30  possibly used for savegames?
-                // scripts[type].scripts[j].action_id      = B_Endian::read_i32(&data_ptr[0x34]); // 0x34  possibly used for savegames?
-                // scripts[type].scripts[j].override_flags = B_Endian::read_i32(&data_ptr[0x38]); // 0x38  possibly used for savegames?
-                // scripts[type].scripts[j].unknown_1      = B_Endian::read_i32(&data_ptr[0x3C]); // 0x3C  unknown
-                // scripts[type].scripts[j].how_much       = B_Endian::read_i32(&data_ptr[0x40]); // 0x40  also unknown
-                // scripts[type].scripts[j].unknown_2      = B_Endian::read_i32(&data_ptr[0x44]); // 0x44  also unknown
-
+                // printf("delete me\n");  //QTODO: delete this line
             }
 
             if (scripts[type].count != check) {
                 //QTODO: this needs to be a crash or an error or something
                 return scripts[0];
             }
-            int wtf = read_adv(map, offset);
-            if (wtf != 0) {
-                printf("wtf found a weird number: %d\n", wtf);
-            }
+
 
             printf("delete me\n");  //QTODO: delete this line
         }
@@ -399,9 +381,6 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
     objects_list ol;
 
     ol.count_total = B_Endian::read_i32(&data_ptr[0x00]);
-    // ol.count_lvl_0 = B_Endian::read_i32(&data_ptr[0x04]);
-    // ol.count_lvl_1 = B_Endian::read_i32(&data_ptr[0x08]);
-    // ol.count_lvl_2 = B_Endian::read_i32(&data_ptr[0x0C]);
 
     ol.count_elev[0] = B_Endian::read_i32(&data_ptr[0x04]);
     ol.count_elev[1] = B_Endian::read_i32(&data_ptr[0x08]);
