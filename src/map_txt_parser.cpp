@@ -32,6 +32,26 @@ char* find_str(uint8_t* map_txt, char* str, int len)
     return str_start;
 }
 
+char* find_level_marker(uint8_t* map_data, int level, int* marker_len)
+{
+    char buff[24];
+    snprintf(buff, 24, "square_elev: %d\r\n\r\n", level);
+    char* tmp = find_str(map_data, buff, strlen(buff));
+    if (tmp) {
+        *marker_len = strlen(buff);
+        return tmp;
+    }
+
+    snprintf(buff, 24, "square_elev: %d\n\n", level);
+    tmp = find_str(map_data, buff, strlen(buff));
+    if (tmp) {
+        *marker_len = strlen(buff);
+        return tmp;
+    }
+
+    *marker_len = 0;
+    return nullptr;
+}
 //QTODO: make map_lvls a return instead of passing in?
 void parse_map_txt(uint8_t* map_data, map_lvls* map)
 {
@@ -45,11 +65,10 @@ void parse_map_txt(uint8_t* map_data, map_lvls* map)
     map->data = map_data;
     for (size_t i = 0; i < 3; i++)
     {
-        char buff[24];
-        snprintf(buff, 24, "square_elev: %d\r\n\r\n", i);
-        char* tmp = find_str(map_data, buff, strlen(buff));
+        int marker_len = 0;
+        char* tmp = find_level_marker(map_data, i, &marker_len);
         if (tmp) {
-            map->level[i] = tmp + strlen(buff);
+            map->level[i] = tmp + marker_len;
         }
     }
 
@@ -64,11 +83,13 @@ void map_level_sizes(map_lvls* map)
 {
     if (map->level[0]) {
         if (map->level[1]) {
-            char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
+            int marker_len = 0;
+        char* end = find_level_marker(map->data, 1, &marker_len);
             map->lvl_sizes[0] = end - map->level[0];
         } else
         if (map->level[2]) {
-            char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+            int marker_len = 0;
+        char* end = find_level_marker(map->data, 2, &marker_len);
             map->lvl_sizes[0] = end - map->level[0];
         } else {
             map->lvl_sizes[0] = map->scripts  - map->level[0];
@@ -76,7 +97,8 @@ void map_level_sizes(map_lvls* map)
     }
     if (map->level[1]) {
         if (map->level[2]) {
-            char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+            int marker_len = 0;
+        char* end = find_level_marker(map->data, 2, &marker_len);
             map->lvl_sizes[1] = end - map->level[1];
         } else {
             map->lvl_sizes[1] = map->scripts  - map->level[1];
@@ -87,16 +109,19 @@ void map_level_sizes(map_lvls* map)
     }
 
     if (map->level[0]) {
-        char* end = find_str(map->data, "square_elev: 0\r\n\r\n", strlen("square_elev: 0\r\n\r\n"));
+        int marker_len = 0;
+        char* end = find_level_marker(map->data, 0, &marker_len);
         map->header_size = end - (char*)map->data;
     } else
     if (map->level[1]) {
-        char* end = find_str(map->data, "square_elev: 1\r\n\r\n", strlen("square_elev: 1\r\n\r\n"));
+        int marker_len = 0;
+        char* end = find_level_marker(map->data, 1, &marker_len);
         map->header_size = end - (char*)map->data;
         map->header_size = (uint64_t)(map->level[1] - (char*)map->data);
     } else
     if (map->level[2]) {
-        char* end = find_str(map->data, "square_elev: 2\r\n\r\n", strlen("square_elev: 2\r\n\r\n"));
+        int marker_len = 0;
+        char* end = find_level_marker(map->data, 2, &marker_len);
         map->header_size = end - (char*)map->data;
         map->header_size = (uint64_t)(map->level[2] - (char*)map->data);
     } else {

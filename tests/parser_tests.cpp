@@ -80,6 +80,7 @@ constexpr MapFixtureExpectation map_fixtures[] = {
     {"BROKEN2.map", 767096, "BROKEN2.MAP", 21154, 0, 0, 0, 899, 0, 1, 25, 79, {true, true, true}},
     {"Newr1.map",   515376, "NEWR1.MAP",   24305, 0, 0, 0, 353, 0, 1, 1, 54, {true, true, true}},
     {"Newr2.map",   654784, "NEWR2.MAP",   20100, 0, 0, 0, 354, 0, 1, 1, 55, {true, true, true}},
+    {"test16.map", 126968, "TEST16.MAP", 20100, 0, 0, 0, 1538, 0, 1, 0, -1, {true, true, true}},
 };
 
 
@@ -89,6 +90,7 @@ constexpr ScriptFixtureExpectation script_fixtures[] = {
     {"BROKEN2.map", 120336, {0, 5, 0, 51, 102}, 132920},
     {"Newr1.map",   120240, {0, 3, 0, 75, 113}, 134876},
     {"Newr2.map",   120240, {0, 0, 0, 79, 136}, 134716},
+    {"test16.map",  120236, {0, 16, 0, 16, 16}, 123480},
 };
 
 constexpr TextFixtureExpectation txt_fixtures[] = {
@@ -97,8 +99,19 @@ constexpr TextFixtureExpectation txt_fixtures[] = {
     {"BROKEN2.txt", 3750829, {773, 270933, 540957}, 811125, 835145},
     {"NEWR1.txt",   2603917, {299, 268914, 538676}, 808400, 837091},
     {"NEWR2.txt",   3260051, {299, 268743, 538362}, 808031, 840105},
+    {"test16.txt",  836274, {282, 270306, 540330}, 810354, 818686},
 };
 
+int level_marker_size(const std::vector<uint8_t>& data, int marker_offset)
+{
+    constexpr int prefix_size = sizeof("square_elev: 0") - 1;
+    REQUIRE(marker_offset >= 0);
+    REQUIRE(marker_offset + prefix_size < static_cast<int>(data.size()));
+
+    return data[marker_offset + prefix_size] == '\r'
+        ? static_cast<int>(sizeof("square_elev: 0\r\n\r\n") - 1)
+        : static_cast<int>(sizeof("square_elev: 0\n\n") - 1);
+}
 int pointer_offset(const map_lvls& map, const char* pointer)
 {
     REQUIRE(pointer != nullptr);
@@ -168,8 +181,6 @@ TEST_CASE("binary map script parser reads script counts and stops at objects", "
 
 TEST_CASE("text map parser locates fixture sections and level ranges", "[txt]")
 {
-    constexpr int marker_size = sizeof("square_elev: 0\r\n\r\n") - 1;
-
     for (const auto& expected : txt_fixtures) {
         DYNAMIC_SECTION(expected.txt_file) {
             auto data = load_text_fixture(expected.txt_file);
@@ -193,6 +204,7 @@ TEST_CASE("text map parser locates fixture sections and level ranges", "[txt]")
                     continue;
                 }
 
+                const int marker_size = level_marker_size(data, marker_offset);
                 CHECK(pointer_offset(map, map.level[level]) == marker_offset + marker_size);
                 if (previous_level < 0) {
                     CHECK(map.header_size == marker_offset);
