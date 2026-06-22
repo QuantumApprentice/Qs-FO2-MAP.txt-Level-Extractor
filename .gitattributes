@@ -1,0 +1,28 @@
+# This repo is edited on Windows but should stay LF-normalized.
+* text=auto eol=lf
+
+# Source and build files.
+*.c text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hh text eol=lf
+*.hpp text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+CMakePresets.json text eol=lf
+*.json text eol=lf
+*.txt text eol=auto
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.gitignore text eol=lf
+*.gitmodules text eol=lf
+
+# Binary fixtures/assets.
+*.map binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

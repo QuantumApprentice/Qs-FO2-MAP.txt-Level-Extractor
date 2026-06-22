@@ -6,10 +6,12 @@ project(${EXE_NAME} LANGUAGES CXX)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     add_executable(${EXE_NAME} WIN32)   # WIN32 makes program open without dos window
-    set_target_properties(
-        ${EXE_NAME} PROPERTIES
-        LINK_FLAGS "/ENTRY:mainCRTStartup"
-    )
+    if (MSVC)
+        set_target_properties(
+            ${EXE_NAME} PROPERTIES
+            LINK_FLAGS "/ENTRY:mainCRTStartup"
+        )
+    endif()
     target_compile_definitions(
         ${EXE_NAME}
         PUBLIC WINDOWS
@@ -42,17 +44,30 @@ if(USE_TARBALL)
     endif()
 endif()
 
+add_library(qmap_parsers STATIC)
+target_sources(
+    qmap_parsers PRIVATE
+    src/map_txt_parser.cpp
+    src/map_map_parser.cpp
+    src/B_Endian/B_Endian.cpp
+    ${DEPS}/IO_Platform/io_Platform.cpp
+)
+target_include_directories(
+    qmap_parsers PUBLIC
+    src
+    ${DEPS}/IO_Platform/
+)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_compile_definitions(qmap_parsers PUBLIC WINDOWS)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_definitions(qmap_parsers PUBLIC LINUX)
+endif()
+
 target_sources(
     ${EXE_NAME} PRIVATE
     src/main.cpp
     src/map_txt_gui.cpp
-    src/map_txt_parser.cpp
-    src/map_map_parser.cpp
-    src/B_Endian/B_Endian.cpp
-)
-target_sources(
-    ${EXE_NAME} PRIVATE
-    ${DEPS}/IO_Platform/io_Platform.cpp
 )
 
 add_library(ImGui
@@ -96,11 +111,40 @@ target_link_libraries(
 find_package(OpenGL REQUIRED)
 target_link_libraries(
     ${EXE_NAME} PRIVATE
+    qmap_parsers
     ImGui
     glad
     SDL3::SDL3-static
     OpenGL::GL
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG        v3.7.1
+    )
+    FetchContent_MakeAvailable(Catch2)
+
+    add_executable(qmap_parser_tests
+        tests/parser_tests.cpp
+    )
+    target_link_libraries(
+        qmap_parser_tests PRIVATE
+        qmap_parsers
+        Catch2::Catch2WithMain
+    )
+    target_compile_definitions(
+        qmap_parser_tests PRIVATE
+        TEST_MAPS_DIR="${CMAKE_SOURCE_DIR}/test_maps"
+    )
+    add_test(NAME qmap_parser_tests COMMAND qmap_parser_tests)
+    set_tests_properties(
+        qmap_parser_tests PROPERTIES
+        ENVIRONMENT "PATH=C:/msys64/ucrt64/bin;$ENV{PATH}"
+    )
+endif()
 
 
 set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")

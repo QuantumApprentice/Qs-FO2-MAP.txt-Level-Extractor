@@ -41,39 +41,6 @@ struct vars
     int32_t lvars_siz = 0;
     int32_t* lvars = NULL;
 };
-struct script
-{
-    int32_t scr_id;           // 0x00  Packed script id.
-    int32_t scr_next;         // 0x04  Linked-list field in the original engine; usually not useful to external tools.
-    int32_t spatial_tile;     // 0x08  Only present for spatial scripts. Packed tile/elevation value.
-    int32_t spatial_radius;   // 0x0C  Only present for spatial scripts. Spatial trigger radius.
-
-    // Only present for timed scripts.
-    int32_t time;             // 0x08  Game-time value for the timed script.
-
-    // After the optional spatial/timed fields,
-    // every script record stores the same 14 integers:
-    int32_t scr_flags;        // 0x10  (0 in maps, value in saves)
-    int32_t scr_index;        // 0x14  Script id. Script filename is found in LST file script.lst at index id
-    int32_t program_ptr;      // 0x18  not used?
-    uint32_t scr_obj_id;      // 0x1C  Object id for this script
-    int32_t lvar_offset;      // 0x20  Offset into lvars data struct from earlier
-    int32_t lvar_cnt;         // 0x24  (0 in maps, value in saves?)
-    int32_t last_used_val;    // 0x28  possibly used for savegames?
-    int32_t current_action;   // 0x2C  possibly used for savegames?
-    int32_t fixed_param;      // 0x30  possibly used for savegames?
-    int32_t action_id;        // 0x34  possibly used for savegames?
-    int32_t override_flags;   // 0x38  possibly used for savegames?
-    int32_t unknown_1;        // 0x3C  unknown
-    int32_t how_much;         // 0x40  also unknown
-    int32_t unknown_2;        // 0x44  also unknown
-};
-struct scripts_list
-{
-    int32_t count   = 0;
-    script* scripts = nullptr;
-};
-
 struct scenery
 {
     // scenery instance data
@@ -274,105 +241,97 @@ int32_t read_adv(map_lvls* map, int* offset)
     return out;
 }
 
-scripts_list parse_map_scripts(map_lvls* map, int* offset)
+namespace {
+
+int script_record_word_count(int type)
 {
-    scripts_list scripts[5];
-    for (int type = SCRIPT_SYSTEM; type <= SCRIPT_CRITTER; type++) {
-        scripts[type].count = read_adv(map, offset);
+    int words = 16;
+    if (type == SCRIPT_SPATIAL) {
+        words += 2;
+    }
+    if (type == SCRIPT_TIMED) {
+        words += 1;
+    }
+    return words;
+}
 
 
-        //debugging bullshit
-        uint8_t* start_of_scrs = &map->data[*offset];
-        int start_offset = *offset;
-        int this_offset  = 0;
-        //------------------
-
-        int check = 0;
-        if (scripts[type].count > 0) {
-
-
-            // int mod_count = ceil(scripts[type].count % 16);
-            int total_cnt = ceil(scripts[type].count / 16.0f) * 16;
-
-            scripts[type].scripts = (script*)calloc(1, total_cnt * sizeof(script));
-            for (int j = 0; j < total_cnt; j++) {
-        uint8_t* data_ptr = &map->data[*offset];
-        script* scr_ptr = &scripts[type].scripts[j];
-                scripts[type].scripts[j].scr_id         = read_adv(map, offset); // 0x00  Packed script id.
-                scripts[type].scripts[j].scr_next       = read_adv(map, offset); // 0x04  Linked-list field in the original engine; usually no
-
-                if (type == SCRIPT_SYSTEM) {
-                    //QTODO: not a clue what goes here, if anything
-                }
-                if (type == SCRIPT_SPATIAL) {
-                    // Only present for spatial scripts.
-                    scripts[type].scripts[j].spatial_tile   = read_adv(map, offset); // 0x08  Packed tile/elevation value
-                    scripts[type].scripts[j].spatial_radius = read_adv(map, offset); // 0x0C  Spatial trigger radius.
-                }
-                if (type == SCRIPT_TIMED) {
-                    // Only present for timed scripts. (Savegame only?)
-                    scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script
-                }
-                if (type == SCRIPT_OBJECTS) {
-                    // do nothing, already the right size?
-                }
-                if (type == SCRIPT_CRITTER) {
-                    // also do nothing?
-                }
-
-                // After the optional spatial/timed fields,
-                // every script record stores the same 14 integers:
-
-                scripts[type].scripts[j].scr_flags      = read_adv(map, offset); // 0x10  (0 in maps, value in saves)
-                scripts[type].scripts[j].scr_index      = read_adv(map, offset); // 0x14  Script id. Script filename is found in LST file scri
-                scripts[type].scripts[j].program_ptr    = read_adv(map, offset); // 0x18  not used?
-                scripts[type].scripts[j].scr_obj_id     = (uint32_t)read_adv(map, offset); // 0x1C  Object id for this script
-                scripts[type].scripts[j].lvar_offset    = read_adv(map, offset); // 0x20  Offset into lvars data struct from earlier
-                scripts[type].scripts[j].lvar_cnt       = read_adv(map, offset); // 0x24  (0 in maps, value in saves?)
-                scripts[type].scripts[j].last_used_val  = read_adv(map, offset); // 0x28  possibly used for savegames?
-                scripts[type].scripts[j].current_action = read_adv(map, offset); // 0x2C  possibly used for savegames?
-                scripts[type].scripts[j].fixed_param    = read_adv(map, offset); // 0x30  possibly used for savegames?
-                scripts[type].scripts[j].action_id      = read_adv(map, offset); // 0x34  possibly used for savegames?
-                scripts[type].scripts[j].override_flags = read_adv(map, offset); // 0x38  possibly used for savegames?
-                scripts[type].scripts[j].unknown_1      = read_adv(map, offset); // 0x3C  unknown
-                scripts[type].scripts[j].how_much       = read_adv(map, offset); // 0x40  also unknown
-                scripts[type].scripts[j].unknown_2      = read_adv(map, offset); // 0x44  also unknown
-
-                if ((j % 16) == 15) {
-                    int abc = read_adv(map, offset);
-                    if (abc != 16) {
-                        this_offset = *offset;
-                    }
-                    if (abc > 16) {
-                        for (int i = 0; i < 16; i++)
-                        {
-                            int thafuck = read_adv(map, offset);
-                            printf("%d thafuck: %d\n", i, thafuck);
-                        }
-                    }
-                    // check += read_adv(map, offset);
-                    check += abc;
-                    printf("check: %d\n", check);
-                    int wtf = read_adv(map, offset);
-                    if (wtf != 0) {
-                        printf("wtf found a weird number: %d\n", wtf);
-                    }
-                }
-
-                // printf("delete me\n");  //QTODO: delete this line
-            }
-
-            if (scripts[type].count != check) {
-                //QTODO: this needs to be a crash or an error or something
-                return scripts[0];
-            }
-
-
-            printf("delete me\n");  //QTODO: delete this line
+void skip_to_script_block_footer(map_lvls* map, int* offset, int expected_count)
+{
+    while ((*offset + (2 * (int)sizeof(int32_t))) <= map->file_siz) {
+        int footer_count = B_Endian::read_i32(&map->data[*offset]);
+        int footer_next = B_Endian::read_i32(&map->data[*offset + sizeof(int32_t)]);
+        if ((footer_count == expected_count) && (footer_next == 0)) {
+            *offset += 2 * sizeof(int32_t);
+            return;
         }
+        *offset += sizeof(int32_t);
+    }
+}
+
+void parse_script_record(map_lvls* map, int* offset, int type, script* out)
+{
+    out->scr_id = read_adv(map, offset);
+    out->scr_next = read_adv(map, offset);
+
+    if (type == SCRIPT_SPATIAL) {
+        out->spatial_tile = read_adv(map, offset);
+        out->spatial_radius = read_adv(map, offset);
+    }
+    if (type == SCRIPT_TIMED) {
+        out->time = read_adv(map, offset);
     }
 
-    // return scripts;
+    out->scr_flags = read_adv(map, offset);
+    out->scr_index = read_adv(map, offset);
+    out->program_ptr = read_adv(map, offset);
+    out->scr_obj_id = (uint32_t)read_adv(map, offset);
+    out->lvar_offset = read_adv(map, offset);
+    out->lvar_cnt = read_adv(map, offset);
+    out->last_used_val = read_adv(map, offset);
+    out->current_action = read_adv(map, offset);
+    out->fixed_param = read_adv(map, offset);
+    out->action_id = read_adv(map, offset);
+    out->override_flags = read_adv(map, offset);
+    out->unknown_1 = read_adv(map, offset);
+    out->how_much = read_adv(map, offset);
+    out->unknown_2 = read_adv(map, offset);
+}
+
+} // namespace
+
+void parse_map_scripts(map_lvls* map, int* offset, scripts_list scripts[SCRIPT_TYPE_COUNT])
+{
+    for (int type = SCRIPT_SYSTEM; type < SCRIPT_TYPE_COUNT; ++type) {
+        scripts[type].count = read_adv(map, offset);
+        if (scripts[type].count <= 0) {
+            scripts[type].scripts = nullptr;
+            continue;
+        }
+
+        scripts[type].scripts = (script*)calloc(scripts[type].count, sizeof(script));
+
+        int remaining = scripts[type].count;
+        int parsed = 0;
+
+        while (remaining > 0) {
+            const int block_count = (remaining > 16) ? 16 : remaining;
+            for (int i = 0; i < block_count; ++i) {
+                parse_script_record(map, offset, type, &scripts[type].scripts[parsed++]);
+            }
+            remaining -= block_count;
+
+            if (remaining > 0) {
+                read_adv(map, offset); // number of records in this full 16-record block
+                read_adv(map, offset); // serialized next-block pointer from the original engine
+            } else if (block_count < 16) {
+                skip_to_script_block_footer(map, offset, block_count);
+            } else {
+                read_adv(map, offset); // final full-block record count
+                read_adv(map, offset); // serialized next-block pointer
+            }
+        }
+    }
 }
 
 objects_list parse_map_objects(map_lvls* map, int* offset)
@@ -493,7 +452,8 @@ void export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     tiles t_L = parse_map_tiles(map_L, &offset);
     // tiles t_R = parse_map_tiles(map_R, &offset);
 
-    scripts_list s_L = parse_map_scripts(map_L, &offset);
+    scripts_list s_L[SCRIPT_TYPE_COUNT];
+    parse_map_scripts(map_L, &offset, s_L);
     // scripts_list s_R = parse_map_scripts(map_R, &offset);
 
     objects_list o_L = parse_map_objects(map_L, &offset);
