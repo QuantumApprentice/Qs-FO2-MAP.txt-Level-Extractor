@@ -253,23 +253,52 @@ int script_record_word_count(int type) {
   return words;
 }
 
+int script_type_high_byte(int32_t pid) {
+  return ((uint32_t)pid) >> 24;
+}
+
+bool is_known_script_type(int type) {
+  return (type >= SCRIPT_SYSTEM) && (type <= SCRIPT_CRITTER);
+}
+
 int script_type_from_pid(int32_t pid) {
-  int type = ((uint32_t)pid) >> 24;
-  if ((type >= SCRIPT_SYSTEM) && (type <= SCRIPT_CRITTER)) {
+  int type = script_type_high_byte(pid);
+  if (is_known_script_type(type)) {
     return type;
   }
   return SCRIPT_SYSTEM;
 }
 
-void skip_serialized_script_record(map_lvls *map, int *offset) {
-  int32_t pid = B_Endian::read_i32(&map->data[*offset]);
-  *offset += script_record_word_count(script_type_from_pid(pid)) * sizeof(int32_t);
+void skip_serialized_script_padding_record(map_lvls *map, int *offset,
+                                           int section_type, int slot_index) {
+  int start_offset = *offset;
+  int32_t scr_id = B_Endian::read_i32(&map->data[*offset]);
+  int32_t scr_next = B_Endian::read_i32(&map->data[*offset + sizeof(int32_t)]);
+  int raw_type = script_type_high_byte(scr_id);
+  int inferred_type = script_type_from_pid(scr_id);
+  int words = script_record_word_count(inferred_type);
+
+  if ((raw_type != section_type) && is_known_script_type(raw_type)) {
+    printf("SUSPECT: script padding slot uses different valid layout; "
+           "section_type=%d slot=%d offset=%d scr_id=0x%08X "
+           "scr_next=%d raw_type=%d words=%d\n",
+           section_type, slot_index, start_offset, (uint32_t)scr_id, scr_next,
+           raw_type, words);
+  } else if (!is_known_script_type(raw_type)) {
+    printf("SUSPECT: script padding slot has unknown id high byte; "
+           "section_type=%d slot=%d offset=%d scr_id=0x%08X "
+           "scr_next=%d raw_type=%d using_words=%d\n",
+           section_type, slot_index, start_offset, (uint32_t)scr_id, scr_next,
+           raw_type, words);
+  }
+
+  *offset += words * sizeof(int32_t);
 }
 
 bool skip_script_padding_and_footer(map_lvls *map, int *offset, int block_count,
                                     int type) {
   for (int i = block_count; i < 16; ++i) {
-    skip_serialized_script_record(map, offset);
+    skip_serialized_script_padding_record(map, offset, type, i);
   }
 
   int footer_count = read_adv(map, offset);

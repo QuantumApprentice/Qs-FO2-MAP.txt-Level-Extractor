@@ -41,6 +41,16 @@ std::string header_filename(const map_header& header)
     const auto end = std::find(std::begin(header.filename), std::end(header.filename), '\0');
     return std::string(std::begin(header.filename), end);
 }
+int32_t read_be_i32(const std::vector<uint8_t>& data, int offset)
+{
+    REQUIRE(offset >= 0);
+    REQUIRE(offset + static_cast<int>(sizeof(int32_t)) <= static_cast<int>(data.size()));
+
+    return (static_cast<int32_t>(data[offset]) << 24)
+        | (static_cast<int32_t>(data[offset + 1]) << 16)
+        | (static_cast<int32_t>(data[offset + 2]) << 8)
+        | static_cast<int32_t>(data[offset + 3]);
+}
 
 struct MapFixtureExpectation {
     const char* map_file;
@@ -72,6 +82,20 @@ struct ScriptFixtureExpectation {
     int scripts_offset;
     int script_counts[SCRIPT_TYPE_COUNT];
     int objects_offset;
+    int object_count;
+    int first_elevation_count;
+    int first_object_id;
+};
+
+struct ScriptRecordExpectation {
+    const char* map_file;
+    int type;
+    int index;
+    int32_t scr_id;
+    int32_t scr_index;
+    uint32_t scr_obj_id;
+    int32_t spatial_tile;
+    int32_t spatial_radius;
 };
 
 constexpr MapFixtureExpectation map_fixtures[] = {
@@ -85,14 +109,28 @@ constexpr MapFixtureExpectation map_fixtures[] = {
 
 
 constexpr ScriptFixtureExpectation script_fixtures[] = {
-    {"ARVILL2.map", 40260, {0, 0, 0, 0, 0}, 40280},
-    {"BROKEN1.map", 80368, {0, 0, 0, 58, 40}, 87696},
-    {"BROKEN2.map", 120336, {0, 5, 0, 51, 102}, 132920},
-    {"Newr1.map",   120240, {0, 3, 0, 75, 113}, 134876},
-    {"Newr2.map",   120240, {0, 0, 0, 79, 136}, 134716},
-    {"test16.map",  120236, {0, 16, 0, 16, 16}, 123480},
+    {"ARVILL2.map", 40260, {0, 0, 0, 0, 0}, 40280, 1141, 1141, 586},
+    {"BROKEN1.map", 80368, {0, 0, 0, 58, 40}, 87696, 3533, 3303, 26},
+    {"BROKEN2.map", 120336, {0, 5, 0, 51, 102}, 132920, 7102, 3011, 34},
+    {"Newr1.map",   120240, {0, 3, 0, 75, 113}, 134876, 3910, 2841, 4032},
+    {"Newr2.map",   120240, {0, 0, 0, 79, 136}, 134716, 5229, 3068, 588},
+    {"test16.map",  120236, {0, 16, 0, 16, 16}, 123480, 32, 16, 122},
 };
 
+
+constexpr ScriptRecordExpectation script_record_fixtures[] = {
+    // Values cross-check selected binary records against the mapper .txt dump.
+    {"BROKEN2.map", SCRIPT_SPATIAL, 0, 16777216, 876, 3840206052u, 536891365, 5},
+    {"BROKEN2.map", SCRIPT_SPATIAL, 4, 16777220, 1165, 29894656u, 1073770953, 2},
+    {"BROKEN2.map", SCRIPT_OBJECTS, 0, 50331649, 511, 215u, 0, 0},
+    {"BROKEN2.map", SCRIPT_OBJECTS, 50, 50331665, 1175, 46u, 0, 0},
+    {"BROKEN2.map", SCRIPT_CRITTER, 0, 67108865, 19, 304u, 0, 0},
+    {"BROKEN2.map", SCRIPT_CRITTER, 101, 67108966, 1134, 160u, 0, 0},
+    {"test16.map", SCRIPT_SPATIAL, 15, 16777231, 1833, 185273296u, 21116, 20},
+    {"test16.map", SCRIPT_OBJECTS, 15, 50331663, 826, 96u, 0, 0},
+    {"test16.map", SCRIPT_CRITTER, 0, 67108866, 1856, 136u, 0, 0},
+    {"test16.map", SCRIPT_CRITTER, 15, 67108880, 1890, 104u, 0, 0},
+};
 constexpr TextFixtureExpectation txt_fixtures[] = {
     {"ARVILL2.txt",  734150, {399, -1, -1},       270955, 271060},
     {"BROKEN1.txt", 2073374, {939, 272014, -1},   542038, 556703},
@@ -111,6 +149,25 @@ int level_marker_size(const std::vector<uint8_t>& data, int marker_offset)
     return data[marker_offset + prefix_size] == '\r'
         ? static_cast<int>(sizeof("square_elev: 0\r\n\r\n") - 1)
         : static_cast<int>(sizeof("square_elev: 0\n\n") - 1);
+}
+
+void check_script_record(const scripts_list scripts[SCRIPT_TYPE_COUNT], const ScriptRecordExpectation& expected)
+{
+    REQUIRE(expected.type >= 0);
+    REQUIRE(expected.type < SCRIPT_TYPE_COUNT);
+    REQUIRE(expected.index >= 0);
+    REQUIRE(expected.index < scripts[expected.type].count);
+
+    const script& actual = scripts[expected.type].scripts[expected.index];
+    CHECK(actual.scr_id == expected.scr_id);
+    CHECK(actual.scr_index == expected.scr_index);
+    CHECK(actual.scr_obj_id == expected.scr_obj_id);
+    CHECK(static_cast<int>(((uint32_t)actual.scr_id) >> 24) == expected.type);
+
+    if (expected.type == SCRIPT_SPATIAL) {
+        CHECK(actual.spatial_tile == expected.spatial_tile);
+        CHECK(actual.spatial_radius == expected.spatial_radius);
+    }
 }
 int pointer_offset(const map_lvls& map, const char* pointer)
 {
@@ -170,9 +227,34 @@ TEST_CASE("binary map script parser reads script counts and stops at objects", "
             parse_map_scripts(&map, &offset, scripts);
 
             CHECK(offset == expected.objects_offset);
+            CHECK(read_be_i32(data, offset) == expected.object_count);
+
+            int first_object_offset = offset + static_cast<int>(sizeof(int32_t));
+            int first_elevation_count = 0;
+            while (first_elevation_count == 0) {
+                first_elevation_count = read_be_i32(data, first_object_offset);
+                first_object_offset += static_cast<int>(sizeof(int32_t));
+            }
+            CHECK(first_elevation_count == expected.first_elevation_count);
+            CHECK(read_be_i32(data, first_object_offset) == expected.first_object_id);
+
             for (int type = 0; type < SCRIPT_TYPE_COUNT; ++type) {
                 CHECK(scripts[type].count == expected.script_counts[type]);
                 CHECK((scripts[type].scripts != nullptr) == (expected.script_counts[type] > 0));
+                for (int i = 0; i < scripts[type].count; ++i) {
+                    CHECK(static_cast<int>(((uint32_t)scripts[type].scripts[i].scr_id) >> 24) == type);
+                    CHECK(scripts[type].scripts[i].scr_next == -1);
+                    CHECK(scripts[type].scripts[i].lvar_offset == -1);
+                }
+            }
+
+            for (const auto& record : script_record_fixtures) {
+                if (std::string_view(record.map_file) == expected.map_file) {
+                    check_script_record(scripts, record);
+                }
+            }
+
+            for (int type = 0; type < SCRIPT_TYPE_COUNT; ++type) {
                 free(scripts[type].scripts);
             }
         }
