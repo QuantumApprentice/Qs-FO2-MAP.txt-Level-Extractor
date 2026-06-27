@@ -335,7 +335,7 @@ bool map_txt_gui()
     }
     if (header == -1) {
         ImGui::SameLine();
-        ImGui::Text("Pick a header first");
+        ImGui::Text("Click a Map Name to pick a header first");
     }
 
     ImGui::InputText("Path", path_buff, IM_COUNTOF(path_buff), ImGuiInputTextFlags_ElideLeft);

@@ -13,8 +13,7 @@ This tool should do the job of
 - then generating a new "Q-map.txt" file from the extracted levels.
 
 This can also be used to merge two maps together, making map merges muuuuch easier and less prone to error.
-Also, this fixes issues with scripts having overlapping script ID's, causing the mapper to reject them until the ID's
-are manually fixed so they no longer overlap.
+Also, this fixes issues with scripts having overlapping script ID's, causing the mapper to reject them until the ID's are manually fixed so they no longer overlap.
 
 Use is simple, drag and drop only.
 <br>Drag and drop a Fallout 2 "map_name.txt" file onto one side or the other.
@@ -25,3 +24,8 @@ Use is simple, drag and drop only.
 
 The Export will automatically add a "Q.txt" to the filename so files aren't over-written.
 <br>You should be able to rename this however you want, but be careful not to over-write an old map until you know the new one works.
+
+To Compile:
+```
+git submodule update --init --recursive
+```

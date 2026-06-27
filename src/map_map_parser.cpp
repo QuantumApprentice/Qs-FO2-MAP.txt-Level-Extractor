@@ -45,8 +45,10 @@ struct script
 {
     int32_t scr_id;           // 0x00  Packed script id.
     int32_t scr_next;         // 0x04  Linked-list field in the original engine; usually not useful to external tools.
-    int32_t spatial_tile;     // 0x08  Only present for spatial scripts. Packed tile/elevation value.
-    int32_t spatial_radius;   // 0x0C  Only present for spatial scripts. Spatial trigger radius.
+
+    // Only present for spatial scripts.
+    int32_t spatial_tile;     // 0x08  Packed tile/elevation value.
+    int32_t spatial_radius;   // 0x0C  Spatial trigger radius.
 
     // Only present for timed scripts.
     int32_t time;             // 0x08  Game-time value for the timed script.
@@ -149,9 +151,6 @@ struct objects_list
 struct tiles
 {
     uint32_t elev[3][10000];
-    // uint32_t elev_0[10000];
-    // uint32_t elev_1[10000];
-    // uint32_t elev_2[10000];
 };
 
 
@@ -159,19 +158,19 @@ map_header parse_header(uint8_t* map_file)
 {
     map_header h;
 
-    h.version        = B_Endian::read_u32(&map_file[0]);
-    memcpy(            h.filename,        &map_file[4], 16);
-    h.dude_start     = B_Endian::read_i32(&map_file[20]);
-    h.elev_start     = B_Endian::read_i32(&map_file[24]);
-    h.face_start     = B_Endian::read_i32(&map_file[28]);
-    h.lvar_cnt       = B_Endian::read_i32(&map_file[32]);
-    h.map_script_id  = B_Endian::read_i32(&map_file[36]);
-    h.map_flags      = B_Endian::read_i32(&map_file[40]);
-    h.light_level    = B_Endian::read_i32(&map_file[44]);
-    h.mvar_cnt       = B_Endian::read_i32(&map_file[48]);
-    h.map_id         = B_Endian::read_i32(&map_file[52]);
-    h.game_ticks     = B_Endian::read_u32(&map_file[56]);
-    memcpy(            h.unknown,         &map_file[60], 4*44);
+    h.version        = B_Endian::read_u32(&map_file[0]);         // 0x0000  int32   version	Map version, usually 19 or 20.
+    memcpy(            h.filename,        &map_file[4], 16);     // 0x0004  char[16]	name	Map file name stored in the header.
+    h.dude_start     = B_Endian::read_i32(&map_file[20]);        // 0x0014  int32   entering_tile	Default starting hex tile.
+    h.elev_start     = B_Endian::read_i32(&map_file[24]);        // 0x0018  int32   entering_elevation	Default starting elevation, 0 through 2.
+    h.face_start     = B_Endian::read_i32(&map_file[28]);        // 0x001C  int32   entering_rotation	Default starting rotation, 0 through 5.
+    h.lvar_cnt       = B_Endian::read_i32(&map_file[32]);        // 0x0020  int32   local_vars_count	Number of local map variables following the global variable array.
+    h.map_script_id  = B_Endian::read_i32(&map_file[36]);        // 0x0024  int32   script_index	Map script list index. Fallout 2 CE creates a map script only when this value is greater than zero, then subtracts one for the zero-based scripts.lst index.
+    h.map_flags      = B_Endian::read_i32(&map_file[40]);        // 0x0028  int32   flags	Save/elevation flags.
+    h.light_level    = B_Endian::read_i32(&map_file[44]);        // 0x002C  int32   darkness	Mapper darkness field. Fallout 2 CE writes 1.
+    h.mvar_cnt       = B_Endian::read_i32(&map_file[48]);        // 0x0030  int32   global_vars_count	Number of global map variables immediately after the header.
+    h.map_id         = B_Endian::read_i32(&map_file[52]);        // 0x0034  int32   map_index	Worldmap/maps.txt map index.
+    h.game_ticks     = B_Endian::read_u32(&map_file[56]);        // 0x0038  uint32  last_visit_time	Game time tick when the map was last visited.
+    memcpy(            h.unknown,         &map_file[60], 4*44);  // 0x003C  int32[44]   unknown
 
     return h;
 }
@@ -183,7 +182,7 @@ void parse_map_map(map_lvls* map)
     map_header h = parse_header(map->data);
     map->header_size = sizeof(h);
 
-    // when a level is marked that means there's NO level information (ffs why do it that way?)
+    // when a level IS marked that means there's NO level information (ffs why do it that way?)
     if (!(h.map_flags & MAP_ELEV_0)) {
         //QTODO: replace "Level 0" etc. with proper markers (possibly ptrs to map level data?)
         //QTODO: yeah, this definitely needs a better marker
@@ -228,7 +227,6 @@ vars parse_map_vars(map_lvls* map, int* offset)
 tiles parse_map_tiles(map_lvls* map, int* offset)
 {
     int copy_size = 10000*sizeof(uint32_t);
-    // int offset = (map->header.mvar_cnt + map->header.lvar_cnt) * sizeof(int32_t);
     tiles t;
 
     for (int i = 0; i < 3; i++)
@@ -241,22 +239,6 @@ tiles parse_map_tiles(map_lvls* map, int* offset)
             t.elev[i][0] = -1;
         }
     }
-
-
-    // if (map->level[1]) {
-    //     memcpy(t.elev_1, &map->data[236 + *offset_], copy_size);
-    //     *offset_ += copy_size;
-    // } else {
-    //     //QTODO: this needs a better check than -1 since the array is now uint32_t instead of int32_t
-    //     t.elev_1[0] = -1;
-    // }
-    // if (map->level[2]) {
-    //     memcpy(t.elev_2, &map->data[236 + *offset_], copy_size);
-    //     *offset_ += copy_size;
-    // } else {
-    //     //QTODO: this needs a better check than -1 since the array is now uint32_t instead of int32_t
-    //     t.elev_2[0] = -1;
-    // }
 
     return t;
 }
@@ -282,42 +264,70 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
 
 
         //debugging bullshit
-        uint8_t* start_of_scrs = &map->data[*offset];
-        int start_offset = *offset;
-        int this_offset  = 0;
+        // uint8_t* start_of_scrs = &map->data[*offset];
+        // int start_offset = *offset;
+        int this_type [6] = {0};
+        int this_type2[6] = {0};
+        int curr = 0;
         //------------------
 
         int check = 0;
         if (scripts[type].count > 0) {
 
 
-            // int mod_count = ceil(scripts[type].count % 16);
             int total_cnt = ceil(scripts[type].count / 16.0f) * 16;
 
             scripts[type].scripts = (script*)calloc(1, total_cnt * sizeof(script));
             for (int j = 0; j < total_cnt; j++) {
         uint8_t* data_ptr = &map->data[*offset];
-        script* scr_ptr = &scripts[type].scripts[j];
+        script*  scr_ptr  = &scripts[type].scripts[j];
                 scripts[type].scripts[j].scr_id         = read_adv(map, offset); // 0x00  Packed script id.
                 scripts[type].scripts[j].scr_next       = read_adv(map, offset); // 0x04  Linked-list field in the original engine; usually no
 
-                if (type == SCRIPT_SYSTEM) {
+                int how_i_do_it                 = (scripts[type].scripts[j].scr_id >> 24) & 0x7;
+                int how_the_game_engine_does_it = (scripts[type].scripts[j].scr_id >> 24);
+                this_type[how_i_do_it]++;
+                this_type2[how_the_game_engine_does_it]++;
+
+                switch (how_i_do_it)
+                {
+                case SCRIPT_SYSTEM:
                     //QTODO: not a clue what goes here, if anything
-                }
-                if (type == SCRIPT_SPATIAL) {
+                    break;
+                case SCRIPT_SPATIAL:
                     // Only present for spatial scripts.
                     scripts[type].scripts[j].spatial_tile   = read_adv(map, offset); // 0x08  Packed tile/elevation value
                     scripts[type].scripts[j].spatial_radius = read_adv(map, offset); // 0x0C  Spatial trigger radius.
-                }
-                if (type == SCRIPT_TIMED) {
+                    break;
+                case SCRIPT_TIMED:
                     // Only present for timed scripts. (Savegame only?)
                     scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script
-                }
-                if (type == SCRIPT_OBJECTS) {
+                    break;
+                case SCRIPT_OBJECTS:
                     // do nothing, already the right size?
-                }
-                if (type == SCRIPT_CRITTER) {
+                    break;
+                case SCRIPT_CRITTER:
                     // also do nothing?
+                    break;
+                default:
+                    // wtf? found a PID that doesn't parse as expected
+                    this_type[5]++;
+                    printf("DEBUG: Unrecognized script type: %d\n", how_i_do_it);
+                    break;
+                }
+                switch (how_the_game_engine_does_it)
+                {
+                case SCRIPT_SYSTEM:
+                case SCRIPT_SPATIAL:
+                case SCRIPT_TIMED:
+                case SCRIPT_OBJECTS:
+                case SCRIPT_CRITTER:
+                    break;
+                default:
+                    // wtf? found a PID that doesn't parse as expected
+                    this_type2[5]++;
+                    printf("DEBUG: Unrecognized script type2: %d\n", how_the_game_engine_does_it);
+                    break;
                 }
 
                 // After the optional spatial/timed fields,
@@ -340,19 +350,21 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
 
                 if ((j % 16) == 15) {
                     int abc = read_adv(map, offset);
+                    curr = abc;
                     if (abc != 16) {
-                        this_offset = *offset;
-                    }
-                    if (abc > 16) {
-                        for (int i = 0; i < 16; i++)
-                        {
-                            int thafuck = read_adv(map, offset);
-                            printf("%d thafuck: %d\n", i, thafuck);
+                        if (abc != (scripts[type].count % 16)) {
+                            for (int i = 0; i < 24; i++)
+                            {
+                                // int thafuck = read_adv(map, offset);
+                                int thafuck = (int)data_ptr[i*4];
+                                printf("%d thafuck: %d\n", i, thafuck);
+                            }
                         }
                     }
                     // check += read_adv(map, offset);
                     check += abc;
-                    printf("check: %d\n", check);
+                    // printf("check: %d\n", check);
+                    printf("type: %d :: total: %d :: current: %d\n", type, scripts[type].count, j);
                     int wtf = read_adv(map, offset);
                     if (wtf != 0) {
                         printf("wtf found a weird number: %d\n", wtf);
@@ -364,15 +376,28 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
 
             if (scripts[type].count != check) {
                 //QTODO: this needs to be a crash or an error or something
-                return scripts[0];
+                printf("Check failed. Expected: %d, got: %d, slot count: %d, should be: %d\n", scripts[type].count, check, curr, (scripts[type].count % 16));
+                // return scripts[0];
+            } else {
+                printf("Check Passed. Expected: %d, got: %d, slot count: %d, should be: %d\n", scripts[type].count, check, curr, (scripts[type].count % 16));
             }
-
-
-            printf("delete me\n");  //QTODO: delete this line
+        } else {
+            printf("type: %d :: total: %d\n", type, scripts[type].count);
         }
+        if ((this_type[5] > 0) || (this_type2[5] > 0)) {
+            printf("DEBUG: TYPE %d :: &0x7  has found %d unknown script types\n", type, this_type[5]);
+            printf("DEBUG: TYPE %d :: &0xFF has found %d unknown script types\n", type, this_type2[5]);
+        }
+        for (int i = 0; i < 6; i++) {
+            printf("DEBUG: TYPE %d :: &0x7  PID_type %d has %d\n", type, i, this_type[i]);
+            printf("DEBUG: TYPE %d :: &0xFF PID_type %d has %d\n", type, i, this_type2[i]);
+        }
+
     }
 
-    // return scripts;
+
+
+    return scripts[0];
 }
 
 objects_list parse_map_objects(map_lvls* map, int* offset)
