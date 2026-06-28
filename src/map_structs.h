@@ -8,6 +8,7 @@ enum script_type {
     SCRIPT_TIMED   = 0x2,
     SCRIPT_OBJECTS = 0x3,
     SCRIPT_CRITTER = 0x4,
+    SCRIPT_GARBAGE = 0x5
 };
 enum map_type {
     EMPTY          = 0,

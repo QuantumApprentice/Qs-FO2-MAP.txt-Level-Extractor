@@ -256,83 +256,74 @@ int32_t read_adv(map_lvls* map, int* offset)
     return out;
 }
 
-scripts_list parse_map_scripts(map_lvls* map, int* offset)
+scripts_list* parse_map_scripts(map_lvls* map, int* offset)
 {
-    scripts_list scripts[5];
+    // scripts_list scripts[5];
+    scripts_list* scripts = (scripts_list*)calloc(1, 5*sizeof(scripts_list));
+
     for (int type = SCRIPT_SYSTEM; type <= SCRIPT_CRITTER; type++) {
         scripts[type].count = read_adv(map, offset);
 
-
-        //debugging bullshit
-        // uint8_t* start_of_scrs = &map->data[*offset];
-        // int start_offset = *offset;
-        int this_type [6] = {0};
-        int this_type2[6] = {0};
-        int curr = 0;
-        //------------------
-
+        int this_type[6] = {0};
         int check = 0;
         if (scripts[type].count > 0) {
+            int slot_cnt   = ceil(scripts[type].count / 16.0f) * 16;
+            int scr_cnt    = scripts[type].count;
+            int this_check = 0;
 
-
-            int total_cnt = ceil(scripts[type].count / 16.0f) * 16;
-
-            scripts[type].scripts = (script*)calloc(1, total_cnt * sizeof(script));
-            for (int j = 0; j < total_cnt; j++) {
-        uint8_t* data_ptr = &map->data[*offset];
-        script*  scr_ptr  = &scripts[type].scripts[j];
+            scripts[type].scripts = (script*)calloc(1, slot_cnt * sizeof(script));
+            for (int j = 0; j < slot_cnt; j++) {
                 scripts[type].scripts[j].scr_id         = read_adv(map, offset); // 0x00  Packed script id.
                 scripts[type].scripts[j].scr_next       = read_adv(map, offset); // 0x04  Linked-list field in the original engine; usually no
 
-                int how_i_do_it                 = (scripts[type].scripts[j].scr_id >> 24) & 0x7;
-                int how_the_game_engine_does_it = (scripts[type].scripts[j].scr_id >> 24);
-                this_type[how_i_do_it]++;
-                this_type2[how_the_game_engine_does_it]++;
-
-                switch (how_i_do_it)
+                // the game engine parses out the type using this method only (no masking)
+                // refer to Alex Batalov's reverse engineered code
+                // https://github.com/alexbatalov/fallout2-re/blob/b135fc46ef40c4aecd156f3cebcf88ec531bb8ac/src/game/scripts.c#L1867
+                // https://github.com/alexbatalov/fallout2-re/blob/b135fc46ef40c4aecd156f3cebcf88ec531bb8ac/src/game/object_types.h#L32
+                // also see Jan Simek's mapper code
+                // https://github.com/JanSimek/gecko/issues/78
+                int scr_type = scripts[type].scripts[j].scr_id >> 24;
+                switch (scr_type)
                 {
                 case SCRIPT_SYSTEM:
+                    this_type[SCRIPT_SYSTEM]++;
                     //QTODO: not a clue what goes here, if anything
                     break;
                 case SCRIPT_SPATIAL:
+                    this_type[SCRIPT_SPATIAL]++;
                     // Only present for spatial scripts.
                     scripts[type].scripts[j].spatial_tile   = read_adv(map, offset); // 0x08  Packed tile/elevation value
                     scripts[type].scripts[j].spatial_radius = read_adv(map, offset); // 0x0C  Spatial trigger radius.
                     break;
                 case SCRIPT_TIMED:
+                    this_type[SCRIPT_TIMED]++;
                     // Only present for timed scripts. (Savegame only?)
                     scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script
                     break;
                 case SCRIPT_OBJECTS:
+                    this_type[SCRIPT_OBJECTS]++;
                     // do nothing, already the right size?
                     break;
                 case SCRIPT_CRITTER:
+                    this_type[SCRIPT_CRITTER]++;
                     // also do nothing?
                     break;
                 default:
-                    // wtf? found a PID that doesn't parse as expected
-                    this_type[5]++;
-                    printf("DEBUG: Unrecognized script type: %d\n", how_i_do_it);
-                    break;
-                }
-                switch (how_the_game_engine_does_it)
-                {
-                case SCRIPT_SYSTEM:
-                case SCRIPT_SPATIAL:
-                case SCRIPT_TIMED:
-                case SCRIPT_OBJECTS:
-                case SCRIPT_CRITTER:
-                    break;
-                default:
-                    // wtf? found a PID that doesn't parse as expected
-                    this_type2[5]++;
-                    printf("DEBUG: Unrecognized script type2: %d\n", how_the_game_engine_does_it);
+                    //It looks like the original mapper engine might have placed
+                    // proper script ids in some extent filler slots, and garbage in others.
+                    //There is probably an underlying rule about how to parse filler script
+                    // slots that isn't documented anywhere, but for now it looks like
+                    // we can assume an unrecognized script type is always 16 int32's long,
+                    // but all others are the defined length of the script type (16/17/18 int32).
+                    //Not a clue why scripts are exported this way, or why the extent size seems to be
+                    // arbitrary, or why 16 filler slot counts have to be filled out with garbage either.
+                    this_type[SCRIPT_GARBAGE]++;
+                    printf("DEBUG: map_map_parser.cpp: Unrecognized script type: %d\n", scr_type);
                     break;
                 }
 
                 // After the optional spatial/timed fields,
                 // every script record stores the same 14 integers:
-
                 scripts[type].scripts[j].scr_flags      = read_adv(map, offset); // 0x10  (0 in maps, value in saves)
                 scripts[type].scripts[j].scr_index      = read_adv(map, offset); // 0x14  Script id. Script filename is found in LST file scri
                 scripts[type].scripts[j].program_ptr    = read_adv(map, offset); // 0x18  not used?
@@ -349,55 +340,40 @@ scripts_list parse_map_scripts(map_lvls* map, int* offset)
                 scripts[type].scripts[j].unknown_2      = read_adv(map, offset); // 0x44  also unknown
 
                 if ((j % 16) == 15) {
-                    int abc = read_adv(map, offset);
-                    curr = abc;
-                    if (abc != 16) {
-                        if (abc != (scripts[type].count % 16)) {
-                            for (int i = 0; i < 24; i++)
-                            {
-                                // int thafuck = read_adv(map, offset);
-                                int thafuck = (int)data_ptr[i*4];
-                                printf("%d thafuck: %d\n", i, thafuck);
-                            }
-                        }
+                    this_check = read_adv(map, offset);
+                    if ((this_check != 16) && (this_check != (scr_cnt % 16))) {
+                        printf("ERROR: map_map_parser.cpp: Current check value: (%d) not matching expected value (%d).\n");
+                        free(scripts);
+                        return nullptr;
                     }
-                    // check += read_adv(map, offset);
-                    check += abc;
-                    // printf("check: %d\n", check);
-                    printf("type: %d :: total: %d :: current: %d\n", type, scripts[type].count, j);
-                    int wtf = read_adv(map, offset);
-                    if (wtf != 0) {
-                        printf("wtf found a weird number: %d\n", wtf);
+                    check += this_check;
+                    printf("type: %d :: total: %d :: current: %d\n", type, scr_cnt, j);
+                    int buffer_int = read_adv(map, offset);
+                    if (buffer_int != 0) {
+                        printf("DEBUG: Weird number found after extent script count check: %d\n", buffer_int);
                     }
                 }
-
-                // printf("delete me\n");  //QTODO: delete this line
             }
 
             if (scripts[type].count != check) {
                 //QTODO: this needs to be a crash or an error or something
-                printf("Check failed. Expected: %d, got: %d, slot count: %d, should be: %d\n", scripts[type].count, check, curr, (scripts[type].count % 16));
-                // return scripts[0];
+                printf("ERROR: map_map_parser.cpp: Script extent check failed. Expected: %d, got: %d\n", scr_cnt, check);
+                printf("ERROR: map_map_parser.cpp: Last extent slot count: %d, Expected: %d\n", this_check, (scr_cnt % 16));
+                free(scripts);
+                return nullptr;
             } else {
-                printf("Check Passed. Expected: %d, got: %d, slot count: %d, should be: %d\n", scripts[type].count, check, curr, (scripts[type].count % 16));
+                printf("Script extent check Passed. Expected: %d, got: %d\n", scr_cnt, check);
+                printf("Last extent slot count: %d, Expected: %d\n", this_check, (scr_cnt % 16));
             }
         } else {
             printf("type: %d :: total: %d\n", type, scripts[type].count);
         }
-        if ((this_type[5] > 0) || (this_type2[5] > 0)) {
-            printf("DEBUG: TYPE %d :: &0x7  has found %d unknown script types\n", type, this_type[5]);
-            printf("DEBUG: TYPE %d :: &0xFF has found %d unknown script types\n", type, this_type2[5]);
-        }
         for (int i = 0; i < 6; i++) {
-            printf("DEBUG: TYPE %d :: &0x7  PID_type %d has %d\n", type, i, this_type[i]);
-            printf("DEBUG: TYPE %d :: &0xFF PID_type %d has %d\n", type, i, this_type2[i]);
+            printf("DEBUG: TYPE %d :: SID_type %d has %d scripts\n", type, i, this_type[i]);
         }
-
     }
 
-
-
-    return scripts[0];
+    return scripts;
 }
 
 objects_list parse_map_objects(map_lvls* map, int* offset)
@@ -518,7 +494,7 @@ void export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     tiles t_L = parse_map_tiles(map_L, &offset);
     // tiles t_R = parse_map_tiles(map_R, &offset);
 
-    scripts_list s_L = parse_map_scripts(map_L, &offset);
+    scripts_list* s_L = parse_map_scripts(map_L, &offset);
     // scripts_list s_R = parse_map_scripts(map_R, &offset);
 
     objects_list o_L = parse_map_objects(map_L, &offset);
