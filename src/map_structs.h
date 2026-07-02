@@ -10,6 +10,20 @@ enum script_type {
     SCRIPT_CRITTER = 0x4,
     SCRIPT_GARBAGE = 0x5
 };
+enum object_type {
+    OBJ_TYPE_ITEM       = 0x0,
+    OBJ_TYPE_CRITTER    = 0x1,
+    OBJ_TYPE_SCENERY    = 0x2,
+    OBJ_TYPE_WALL       = 0x3,
+    OBJ_TYPE_TILE       = 0x4,
+    OBJ_TYPE_MISC       = 0x5,
+    OBJ_TYPE_INTRFACE   = 0x6,
+    OBJ_TYPE_INVENTORY  = 0x7,
+    OBJ_TYPE_HEAD       = 0x8,
+    OBJ_TYOE_BACKGROUND = 0x9,
+    OBJ_TYPE_SKILLDEX   , // ???
+    OBJ_TYPE_COUNT      , // ???
+};
 enum map_type {
     EMPTY          = 0,
     MAP_TXT        = 1,

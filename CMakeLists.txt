@@ -53,6 +53,8 @@ target_sources(
 target_sources(
     ${EXE_NAME} PRIVATE
     ${DEPS}/IO_Platform/io_Platform.cpp
+    ${DEPS}/DAT_manager-FO2-/DAT_extract.cpp
+    # ${DEPS}/PROTO_manager-FO2-/Proto_Files.cpp
 )
 
 add_library(ImGui
@@ -69,6 +71,7 @@ add_library(ImGui
 )
 
 add_subdirectory(${DEPS}/glad1/)
+add_subdirectory(${DEPS}/zlib-1.3.1/     SYSTEM)
 
 target_include_directories(
     ImGui PUBLIC
@@ -76,6 +79,8 @@ target_include_directories(
     ${DEPS}/imgui-1.92.7/
     ${DEPS}/imgui-1.92.7/backends/
     ${DEPS}/IO_Platform/
+    ${DEPS}/DAT_manager-FO2-/
+    ${DEPS}/PROTO_manager-FO2-/
 )
 
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -100,6 +105,7 @@ target_link_libraries(
     glad
     SDL3::SDL3-static
     OpenGL::GL
+    zlib
 )
 
 

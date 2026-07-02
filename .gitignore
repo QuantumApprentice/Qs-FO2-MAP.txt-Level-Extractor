@@ -9,6 +9,7 @@ imgui*.ini
 examples/*/Debug/*
 examples/*/Release/*
 examples/*/x64/*
+*.tar.gz
 
 ## Commonly used CMake directories & CMake CPM cache
 build/

@@ -4,3 +4,9 @@
 [submodule "dependencies/imgui-1.92.7"]
 	path = dependencies/imgui-1.92.7
 	url = git@github.com:ocornut/imgui.git
+[submodule "dependencies/DAT_manager-FO2-"]
+	path = dependencies/DAT_manager-FO2-
+	url = git@github.com:QuantumApprentice/DAT_manager-FO2-.git
+[submodule "dependencies/PROTO_manager-FO2-"]
+	path = dependencies/PROTO_manager-FO2-
+	url = git@github.com:QuantumApprentice/PROTO_manager-FO2-.git

@@ -4,6 +4,7 @@
 #include <math.h>
 #include "map_map_parser.h"
 #include "B_Endian/B_Endian.h"
+#include "DAT_extract.h"
 
 enum map_flags
 {
@@ -506,4 +507,88 @@ bool export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
 
     objects_list o_L = parse_map_objects(map_L, &offset);
     // objects_list o_R = parse_map_objects(map_R, &offset);
+
+    return true;
+}
+
+
+#include "DAT_extract.h"
+bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_nfo, STATE_export* state)
+{
+    // memset(state->extracted, 0, 4096);
+    if ((strlen(game_path) + strlen(file_path)) >= MAX_PATH) {
+        printf("ERROR: Path length is too long: %d\n", strlen(game_path) + strlen(file_path));
+        return false;
+    }
+
+    //64mb buffer
+    #define BUFF_size           (1024*1024*64)
+    Buffer buff = {
+        .file_size = 0,
+        .file_data = (uint8_t*)malloc(BUFF_size),
+    };
+
+    DAT_file dat_file = load_dat_file("master", game_path);
+
+    bool success = false;
+
+    char path_buff[MAX_PATH];
+
+
+    const char* type = nullptr;
+    switch (pid >> 24)
+    {
+    case OBJ_TYPE_ITEM:
+        type = "ITEM";
+        break;
+    case OBJ_TYPE_CRITTER:
+        type = "CRITTER";
+        break;
+    case OBJ_TYPE_SCENERY:
+        type = "SCENERY";
+        break;
+    case OBJ_TYPE_WALL:
+        type = "WALL";
+        break;
+    case OBJ_TYPE_TILE:
+        type = "TILE";
+        break;
+    case OBJ_TYPE_MISC:
+        type = "MISC";
+        break;
+    case OBJ_TYPE_INTRFACE:
+        type = "INTRFACE";
+        break;
+    case OBJ_TYPE_INVENTORY:
+        type = "INVENTORY";
+        break;
+    case OBJ_TYPE_HEAD:
+        type = "HEAD";
+        break;
+    case OBJ_TYOE_BACKGROUND:
+        type = "BACKGROUN";
+        break;
+    case OBJ_TYPE_SKILLDEX:
+        type = "SKILLDEX";
+        break;
+    case OBJ_TYPE_COUNT:
+        type = "COUNT";
+        break;
+
+    default:
+        printf("ERROR: Object Type not found - PID type: %d\n", pid >> 24);
+        return false;
+        break;
+    }
+
+    snprintf(path_buff, MAX_PATH, "proto\\%s\\%s.LST", game_path, type, type);
+    success = extract_from_DAT(path_buff, "master", game_path, &dat_file, &buff);
+    if (!success) {
+        return false;
+    }
+    uint8_t* proto = buff.file_data;
+
+    free(dat_file.data);
+    free(buff.file_data);
+    return true;
 }
