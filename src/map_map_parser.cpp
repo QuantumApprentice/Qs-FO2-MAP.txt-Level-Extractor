@@ -81,7 +81,7 @@ struct scenery
     // scenery instance data
     int32_t flags;            // 0x54  instance flags
     int32_t door_flags;       // 0x58  open/shut flags, stairs/elevator/ladders have destination_built_tile
-    int32_t destination;      // 0x5C  destination map/level
+    // int32_t destination;      // 0x5C  destination map/level
 };
 struct critter
 {
@@ -125,7 +125,7 @@ struct object
     int32_t frame;            // 0x18  current animation frame (for save?)
     int32_t rotation;         // 0x1C  object rotation
     int32_t obj_fid;//PID?    // 0x20  art FID for object
-    int32_t obj_flags;        // 0x24  0x01000000 right hand, 0x02000000 left hand, 0x03000000 armor worn
+    uint32_t obj_flags;       // 0x24  0x01000000 right hand, 0x02000000 left hand, 0x03000000 armor worn
     int32_t elevation;        // 0x28
     int32_t obj_pid;          // 0x2C
     int32_t obj_cid;          // 0x30  combat id (save files?) -1 for normal objects 
@@ -381,46 +381,44 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
     uint8_t* data_ptr = &map->data[*offset];
     objects_list ol;
 
-    ol.count_total = B_Endian::read_i32(&data_ptr[0x00]);
-
-    ol.count_elev[0] = B_Endian::read_i32(&data_ptr[0x04]);
-    ol.count_elev[1] = B_Endian::read_i32(&data_ptr[0x08]);
-    ol.count_elev[2] = B_Endian::read_i32(&data_ptr[0x0C]);
-
-    ol.objects = (object*)malloc(sizeof(object)*ol.count_total);
+    ol.count_total = read_adv(map, offset);
+    ol.objects = (object*)calloc(1, sizeof(object)*ol.count_total);
     object* obj = ol.objects;
 
     for (int elev = 0; elev < 3; elev++) {
-        for (int i = 0; i < ol.count_elev[elev]; i++) {
-            obj[i].obj_id          = B_Endian::read_i32(&data_ptr[0x00]);
-            obj[i].obj_tile        = B_Endian::read_i32(&data_ptr[0x04]);
-            obj[i].x               = B_Endian::read_i32(&data_ptr[0x08]);
-            obj[i].y               = B_Endian::read_i32(&data_ptr[0x0C]);
-            obj[i].sx              = B_Endian::read_i32(&data_ptr[0x10]);
-            obj[i].sy              = B_Endian::read_i32(&data_ptr[0x14]);
-            obj[i].frame           = B_Endian::read_i32(&data_ptr[0x18]);
-            obj[i].rotation        = B_Endian::read_i32(&data_ptr[0x1C]);
-            obj[i].obj_fid         = B_Endian::read_i32(&data_ptr[0x20]);
-            obj[i].obj_flags       = B_Endian::read_i32(&data_ptr[0x24]);
-            obj[i].elevation       = B_Endian::read_i32(&data_ptr[0x28]);
-            obj[i].obj_pid         = B_Endian::read_i32(&data_ptr[0x2C]);
-            obj[i].obj_cid         = B_Endian::read_i32(&data_ptr[0x30]);
-            obj[i].light_radius    = B_Endian::read_i32(&data_ptr[0x34]);
-            obj[i].light_intensity = B_Endian::read_i32(&data_ptr[0x38]);
-            obj[i].outline_color   = B_Endian::read_i32(&data_ptr[0x3C]);
-            obj[i].obj_sid         = B_Endian::read_i32(&data_ptr[0x40]);
-            obj[i].obj_scr_index   = B_Endian::read_i32(&data_ptr[0x44]);
+        ol.count_elev[elev] = read_adv(map, offset);
 
-            obj[i].inventory_cnt   = B_Endian::read_i32(&data_ptr[0x48]);
-            obj[i].inventory_size  = B_Endian::read_i32(&data_ptr[0x4C]);
+        for (int i = 0; i < ol.count_elev[elev]; i++) {
+            obj[i].obj_id          = read_adv(map, offset);     // 0x00   id	Object id.
+            obj[i].obj_tile        = read_adv(map, offset);     // 0x04   tile	Object hex tile, or -1 for objects not placed on the map.
+            obj[i].x               = read_adv(map, offset);     // 0x08   x	Pixel x offset.
+            obj[i].y               = read_adv(map, offset);     // 0x0C   y	Pixel y offset.
+            obj[i].sx              = read_adv(map, offset);     // 0x10   sx	Cached screen x.
+            obj[i].sy              = read_adv(map, offset);     // 0x14   sy	Cached screen y.
+            obj[i].frame           = read_adv(map, offset);     // 0x18   frame	Current FRM frame.
+            obj[i].rotation        = read_adv(map, offset);     // 0x1C   rotation	Rotation, 0 through 5.
+            obj[i].obj_fid         = read_adv(map, offset);     // 0x20   fid	Current art FID.
+            obj[i].obj_flags       = read_adv(map, offset);     // 0x24   flags	Instance object flags.
+            obj[i].elevation       = read_adv(map, offset);     // 0x28   elevation	Object elevation. During load the engine also forces this to the current elevation loop.
+            obj[i].obj_pid         = read_adv(map, offset);     // 0x2C   pid	Prototype PID. Use this with PRO files to enrich the object.
+            obj[i].obj_cid         = read_adv(map, offset);     // 0x30   cid	Combat id, mostly relevant to saved/in-combat state.
+            obj[i].light_radius    = read_adv(map, offset);     // 0x34   light_distance	Instance light radius.
+            obj[i].light_intensity = read_adv(map, offset);     // 0x38   light_intensity	Instance light intensity.
+            obj[i].outline_color   = read_adv(map, offset);     // 0x3C   outline	Outline color/state in saved maps. Clean map reads ignore this value.
+            obj[i].obj_sid         = read_adv(map, offset);     // 0x40   sid	Runtime script id attached to the object.
+            obj[i].obj_scr_index   = read_adv(map, offset);     // 0x44   script_index	Script index from scripts.lst, or -1.
+
+            obj[i].inventory_cnt   = read_adv(map, offset);     // 0x48
+            obj[i].inventory_size  = read_adv(map, offset);     // 0x4C
 
             if (obj[i].inventory_cnt > 0) {
                 // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
             }
             //QTODO: parse inventory
 
-
-            switch ((obj[i].obj_pid >> 24) & 0x7)
+            // switch ((obj[i].obj_pid >> 24) & 0x7)
+            uint8_t pid = obj[i].obj_pid >> 24;
+            switch (pid)
             {
             case OBJ_ITEM:
                 // parse item
@@ -429,6 +427,11 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
                 // parse critter
                 break;
             case OBJ_SCENERY:
+                scenery scen;
+                scen = {0};
+                scen.flags = read_adv(map, offset);
+                scen.door_flags  = read_adv(map, offset);
+                // scen.destination = read_adv(map, offset);
                 // parse scenery
                 break;
             case OBJ_WALL:
@@ -459,8 +462,8 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
             }
         }
         
+
     }
-    
 
 
     return ol;
@@ -482,7 +485,7 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
 //  what is in the file)
 
 
-void export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path_buff)
+bool export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path_buff)
 {
     map_header* head = (header == 0) ? &map_L->header     : &map_R->header;
     int H_size       = (header == 0) ? map_L->header_size : map_R->header_size;
@@ -495,6 +498,10 @@ void export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     // tiles t_R = parse_map_tiles(map_R, &offset);
 
     scripts_list* s_L = parse_map_scripts(map_L, &offset);
+    if (s_L == nullptr) {
+        printf("ERROR: map_L - Unable to parse scripts.\n");
+        return false;
+    }
     // scripts_list s_R = parse_map_scripts(map_R, &offset);
 
     objects_list o_L = parse_map_objects(map_L, &offset);

@@ -503,10 +503,10 @@ void check_char_scripts(parsed_scripts* scripts, char** objects, script_type typ
 
 }
 
-void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path)
+bool export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path)
 {
     if (header == -1) {
-        return;
+        return false;
     }
 
     uint8_t* head   = (header == 0) ? map_L->data : map_R->data;
@@ -859,4 +859,6 @@ void export_map_txt(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
             free(scripts[elevation].scr_num[i]);
         }
     }
+
+    return true;
 }

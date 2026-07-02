@@ -175,7 +175,14 @@ void export_map(char** label_ptr_M, int header, char* path_buff)
     // .map file extension for both maps or one .map and one empty
     if ((map_L.map_type == MAP_MAP || map_L.map_type == EMPTY)
     &&  (map_R.map_type == MAP_MAP || map_R.map_type == EMPTY)) {
-        export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff);
+        bool pass = export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff);
+        if (pass == false) {
+            open_err_popup = true;
+            snprintf(error_text, ERR_TXT_LEN,
+            "Problem occurred while exporting .MAP file.\n"
+            "See terminal output for debugging info."
+            );
+        }
     } else
     // .txt file extension for both maps or one .txt and one empty
     if ((map_L.map_type == MAP_TXT || map_L.map_type == EMPTY)
