@@ -60,6 +60,15 @@ void file_drop_callback(const char* full_path)
     } else
     if (io_strncasecmp(ext, "map", 3) == 0) {
         map_type = MAP_MAP;
+        snprintf(error_text, ERR_TXT_LEN,
+        "MAP files need access to .PRO files.\n"
+        "These files are located in either\n"
+        "the 'Fallout 2/data/proto/' folder\n"
+        "or in master.dat under the same.\n"
+        "Please add the game directory or\n"
+        "the master.dat directory."
+        );
+        open_err_popup = true;
     } else {
         snprintf(error_text, ERR_TXT_LEN,
         "Wrong file type.\n"
@@ -163,7 +172,7 @@ bool hover_box()
     return false;
 }
 
-void export_map(char** label_ptr_M, int header, char* path_buff)
+void export_map(char** label_ptr_M, int header, char* path_buff, char* game_path)
 {
     if (map_L.data == nullptr && map_R.data == nullptr) {
         return;
@@ -175,7 +184,7 @@ void export_map(char** label_ptr_M, int header, char* path_buff)
     // .map file extension for both maps or one .map and one empty
     if ((map_L.map_type == MAP_MAP || map_L.map_type == EMPTY)
     &&  (map_R.map_type == MAP_MAP || map_R.map_type == EMPTY)) {
-        bool pass = export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff);
+        bool pass = export_map_map(label_ptr_M, &map_L, &map_R, header, path_buff, game_path);
         if (pass == false) {
             open_err_popup = true;
             snprintf(error_text, ERR_TXT_LEN,
@@ -209,7 +218,7 @@ void error_popup()
         ImGui::CloseCurrentPopup();
     }
 }
-void overwrite_popup(char** label_ptr_M, int header, char* path_buff)
+void overwrite_popup(char** label_ptr_M, int header, char* path_buff, char* game_path)
 {
     ImGui::Text("Don't save over the original files\n"
                 "for now, I'm not sure they would\n"
@@ -217,7 +226,7 @@ void overwrite_popup(char** label_ptr_M, int header, char* path_buff)
     ImGui::Text("File already exists, overwrite?");
     if (ImGui::Button("Overwrite")) {
         //QTODO: this needs to work for both types
-        export_map(label_ptr_M, header, path_buff);
+        export_map(label_ptr_M, header, path_buff, game_path);
         // export_map_txt(label_ptr_M, &map_L, &map_R, header, path_buff);
         ImGui::CloseCurrentPopup();
     }
@@ -237,6 +246,7 @@ bool map_txt_gui()
     static int header = -1;
     #define PATH_SIZE           (MAX_PATH)
     static char path_buff[PATH_SIZE] = "/path/to/some/folder/with/long/mapname.txt";
+    static char master_buff[PATH_SIZE] = "(put something here)/Fallout 2/master.dat";
 
     ImGui::Text("Map Names:");
 
@@ -329,7 +339,7 @@ bool map_txt_gui()
     }
 
     if (ImGui::BeginPopup("Overwrite?")) {
-        overwrite_popup(label_ptr_M, header, path_buff);
+        overwrite_popup(label_ptr_M, header, path_buff, master_buff);
         ImGui::EndPopup();
     }
 
@@ -337,7 +347,7 @@ bool map_txt_gui()
         if (io_file_exists(path_buff)) {
             ImGui::OpenPopup("Overwrite?");
         } else {
-            export_map(label_ptr_M, header, path_buff);
+            export_map(label_ptr_M, header, path_buff, master_buff);
         }
     }
     if (header == -1) {
@@ -345,7 +355,10 @@ bool map_txt_gui()
         ImGui::Text("Click a Map Name to pick a header first");
     }
 
-    ImGui::InputText("Path", path_buff, IM_COUNTOF(path_buff), ImGuiInputTextFlags_ElideLeft);
+    ImGui::InputText("MAP Path", path_buff, IM_COUNTOF(path_buff), ImGuiInputTextFlags_ElideLeft);
+    if ((map_L.map_type == MAP_MAP) || (map_R.map_type == MAP_MAP)) {
+        ImGui::InputText("Master.DAT path", master_buff, IM_COUNTOF(master_buff), ImGuiInputTextFlags_ElideLeft);
+    }
 
 
     return false;

@@ -20,7 +20,7 @@ enum object_type {
     OBJ_TYPE_INTRFACE   = 0x6,
     OBJ_TYPE_INVENTORY  = 0x7,
     OBJ_TYPE_HEAD       = 0x8,
-    OBJ_TYOE_BACKGROUND = 0x9,
+    OBJ_TYPE_BACKGROUND = 0x9,
     OBJ_TYPE_SKILLDEX   , // ???
     OBJ_TYPE_COUNT      , // ???
 };

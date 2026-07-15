@@ -377,13 +377,18 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
     return scripts;
 }
 
-objects_list parse_map_objects(map_lvls* map, int* offset)
+objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
 {
     uint8_t* data_ptr = &map->data[*offset];
-    objects_list ol;
+    objects_list ol = {0};
 
     ol.count_total = read_adv(map, offset);
     ol.objects = (object*)calloc(1, sizeof(object)*ol.count_total);
+    if (ol.objects == nullptr) {
+        printf("ERROR: Unable to allocate memory for objects list.\n");
+        return ol;
+    }
+
     object* obj = ol.objects;
 
     for (int elev = 0; elev < 3; elev++) {
@@ -409,17 +414,16 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
             obj[i].obj_sid         = read_adv(map, offset);     // 0x40   sid	Runtime script id attached to the object.
             obj[i].obj_scr_index   = read_adv(map, offset);     // 0x44   script_index	Script index from scripts.lst, or -1.
 
-            obj[i].inventory_cnt   = read_adv(map, offset);     // 0x48
-            obj[i].inventory_size  = read_adv(map, offset);     // 0x4C
 
-            if (obj[i].inventory_cnt > 0) {
-                // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
-            }
-            //QTODO: parse inventory
+            char* temp_path = "/home/quantum/Programming/Fallout 2 Modding/fallout_map_txt_level_parser/test_maps/";
 
-            // switch ((obj[i].obj_pid >> 24) & 0x7)
-            uint8_t pid = obj[i].obj_pid >> 24;
-            switch (pid)
+            // DAT_file dat = load_dat_file("master", game_path);
+            DAT_file master_dat = load_dat_file("master", temp_path);
+            // DAT_Buffer buff;
+
+            uint8_t pid_type   = obj[i].obj_pid >> 24;
+            uint32_t pid_proto = obj[i].obj_pid & 0x7FFFFF;
+            switch (pid_type)
             {
             case OBJ_ITEM:
                 // parse item
@@ -428,10 +432,28 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
                 // parse critter
                 break;
             case OBJ_SCENERY:
+
+                DIR_entry* scenery_lst;
+                scenery_lst = extract_from_DAT(
+                    "proto\\SCENERY\\scenery.lst",
+                    game_path,
+                    &master_dat
+                );
+
+                LST_array scenery_arr;
+                scenery_arr = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
+                if (scenery_arr.line == nullptr) {
+                    printf("ERROR: Failed to parse .lst file into an array.\n");
+                    return ol;
+                }
+
+                char* proto_name;
+                proto_name = scenery_arr.line[pid_proto];
+
                 scenery scen;
                 scen = {0};
-                scen.flags = read_adv(map, offset);
-                scen.door_flags  = read_adv(map, offset);
+                scen.flags      = read_adv(map, offset);
+                scen.door_flags = read_adv(map, offset);
                 // scen.destination = read_adv(map, offset);
                 // parse scenery
                 break;
@@ -461,6 +483,19 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
                 printf("ERROR: Object type not recognized.");
                 break;
             }
+
+
+
+
+            obj[i].inventory_cnt   = read_adv(map, offset);     // 0x48
+            obj[i].inventory_size  = read_adv(map, offset);     // 0x4C
+
+            if (obj[i].inventory_cnt > 0) {
+                // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
+            }
+            //QTODO: parse inventory
+
+
         }
         
 
@@ -486,7 +521,7 @@ objects_list parse_map_objects(map_lvls* map, int* offset)
 //  what is in the file)
 
 
-bool export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path_buff)
+bool export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int header, char* path_buff, char* game_path)
 {
     map_header* head = (header == 0) ? &map_L->header     : &map_R->header;
     int H_size       = (header == 0) ? map_L->header_size : map_R->header_size;
@@ -505,7 +540,7 @@ bool export_map_map(char** label_ptr_M, map_lvls* map_L, map_lvls* map_R, int he
     }
     // scripts_list s_R = parse_map_scripts(map_R, &offset);
 
-    objects_list o_L = parse_map_objects(map_L, &offset);
+    objects_list o_L = parse_map_objects(map_L, &offset, game_path);
     // objects_list o_R = parse_map_objects(map_R, &offset);
 
     return true;
@@ -523,18 +558,15 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
 
     //64mb buffer
     #define BUFF_size           (1024*1024*64)
-    Buffer buff = {
-        .file_size = 0,
-        .file_data = (uint8_t*)malloc(BUFF_size),
+    DAT_buffer buff = {
+        buff.size = 0,
+        buff.data = (uint8_t*)malloc(BUFF_size),
     };
 
     DAT_file dat_file = load_dat_file("master", game_path);
 
     bool success = false;
-
     char path_buff[MAX_PATH];
-
-
     const char* type = nullptr;
     switch (pid >> 24)
     {
@@ -565,8 +597,8 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
     case OBJ_TYPE_HEAD:
         type = "HEAD";
         break;
-    case OBJ_TYOE_BACKGROUND:
-        type = "BACKGROUN";
+    case OBJ_TYPE_BACKGROUND:
+        type = "BACKGROUND";
         break;
     case OBJ_TYPE_SKILLDEX:
         type = "SKILLDEX";
@@ -582,13 +614,13 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
     }
 
     snprintf(path_buff, MAX_PATH, "proto\\%s\\%s.LST", game_path, type, type);
-    success = extract_from_DAT(path_buff, "master", game_path, &dat_file, &buff);
+    success = extract_from_DAT(path_buff, game_path, &dat_file);//, &buff);
     if (!success) {
         return false;
     }
-    uint8_t* proto = buff.file_data;
+    uint8_t* proto = buff.data;
 
     free(dat_file.data);
-    free(buff.file_data);
+    free(buff.data);
     return true;
 }
