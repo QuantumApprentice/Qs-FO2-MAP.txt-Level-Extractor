@@ -54,7 +54,7 @@ target_sources(
     ${EXE_NAME} PRIVATE
     ${DEPS}/IO_Platform/io_Platform.cpp
     ${DEPS}/DAT_manager-FO2-/DAT_extract.cpp
-    # ${DEPS}/PROTO_manager-FO2-/Proto_Files.cpp
+    ${DEPS}/PROTO_manager-FO2-/Proto_Files.cpp
 )
 
 add_library(ImGui

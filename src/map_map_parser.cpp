@@ -5,6 +5,7 @@
 #include "map_map_parser.h"
 #include "B_Endian/B_Endian.h"
 #include "DAT_extract.h"
+#include "Proto_Files.h"
 
 enum map_flags
 {
@@ -12,27 +13,6 @@ enum map_flags
     MAP_ELEV_0      = 0x2,  // map has an elevation at level 0.
     MAP_ELEV_1      = 0x4,  // map has an elevation at level 1.
     MAP_ELEV_2      = 0x8   // map has an elevation at level 2.
-};
-enum object_types
-{
-    // The PID is a fundamental type used in the MAP file.
-    // It is an identifier for describing objects.
-    // It consists of a 4 byte integer of the form:
-    //      0xaa00bbbb.
-    // The byte aa is the type of the object,
-    // while the 2 bytes bbbb are the id of the object.
-    // The id is typically an index into a LST file.
-    // Valid types include:
-    OBJ_ITEM     = 0x00,
-    OBJ_CRITTER  = 0x01,
-    OBJ_SCENERY  = 0x02,
-    OBJ_WALL     = 0x03,
-    OBJ_TILE     = 0x04,
-    OBJ_MISC     = 0x05,
-    OBJ_INTRFACE = 0x06,
-    OBJ_INVEN    = 0x07,
-    OBJ_HEAD     = 0x08,
-    OBJ_BG       = 0x09
 };
 
 struct vars
@@ -244,7 +224,7 @@ tiles parse_map_tiles(map_lvls* map, int* offset)
     return t;
 }
 
-int32_t read_adv(map_lvls* map, int* offset)
+int32_t read_adv_i32(map_lvls* map, int* offset)
 {
     if ((*offset + sizeof(int32_t)) > map->file_siz) {
         return 0;
@@ -263,7 +243,7 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
     scripts_list* scripts = (scripts_list*)calloc(1, 5*sizeof(scripts_list));
 
     for (int type = SCRIPT_SYSTEM; type <= SCRIPT_CRITTER; type++) {
-        scripts[type].count = read_adv(map, offset);
+        scripts[type].count = read_adv_i32(map, offset);
 
         int this_type[6] = {0};
         int check = 0;
@@ -274,8 +254,8 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
 
             scripts[type].scripts = (script*)calloc(1, slot_cnt * sizeof(script));
             for (int j = 0; j < slot_cnt; j++) {
-                scripts[type].scripts[j].scr_id         = read_adv(map, offset); // 0x00  Packed script id.
-                scripts[type].scripts[j].scr_next       = read_adv(map, offset); // 0x04  Linked-list field in the original engine; usually no
+                scripts[type].scripts[j].scr_id         = read_adv_i32(map, offset); // 0x00  Packed script id.
+                scripts[type].scripts[j].scr_next       = read_adv_i32(map, offset); // 0x04  Linked-list field in the original engine; usually no
 
                 // the game engine parses out the type using this method only (no masking)
                 // refer to Alex Batalov's reverse engineered code
@@ -293,13 +273,13 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
                 case SCRIPT_SPATIAL:
                     this_type[SCRIPT_SPATIAL]++;
                     // Only present for spatial scripts.
-                    scripts[type].scripts[j].spatial_tile   = read_adv(map, offset); // 0x08  Packed tile/elevation value
-                    scripts[type].scripts[j].spatial_radius = read_adv(map, offset); // 0x0C  Spatial trigger radius.
+                    scripts[type].scripts[j].spatial_tile   = read_adv_i32(map, offset); // 0x08  Packed tile/elevation value
+                    scripts[type].scripts[j].spatial_radius = read_adv_i32(map, offset); // 0x0C  Spatial trigger radius.
                     break;
                 case SCRIPT_TIMED:
                     this_type[SCRIPT_TIMED]++;
                     // Only present for timed scripts. (Savegame only?)
-                    scripts[type].scripts[j].time           = read_adv(map, offset); // 0x08  Game-time value for the timed script
+                    scripts[type].scripts[j].time           = read_adv_i32(map, offset); // 0x08  Game-time value for the timed script
                     break;
                 case SCRIPT_OBJECTS:
                     this_type[SCRIPT_OBJECTS]++;
@@ -325,23 +305,23 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
 
                 // After the optional spatial/timed fields,
                 // every script record stores the same 14 integers:
-                scripts[type].scripts[j].scr_flags      = read_adv(map, offset); // 0x10  (0 in maps, value in saves)
-                scripts[type].scripts[j].scr_index      = read_adv(map, offset); // 0x14  Script id. Script filename is found in LST file scri
-                scripts[type].scripts[j].program_ptr    = read_adv(map, offset); // 0x18  not used?
-                scripts[type].scripts[j].scr_obj_id     = (uint32_t)read_adv(map, offset); // 0x1C  Object id for this script
-                scripts[type].scripts[j].lvar_offset    = read_adv(map, offset); // 0x20  Offset into lvars data struct from earlier
-                scripts[type].scripts[j].lvar_cnt       = read_adv(map, offset); // 0x24  (0 in maps, value in saves?)
-                scripts[type].scripts[j].last_used_val  = read_adv(map, offset); // 0x28  possibly used for savegames?
-                scripts[type].scripts[j].current_action = read_adv(map, offset); // 0x2C  possibly used for savegames?
-                scripts[type].scripts[j].fixed_param    = read_adv(map, offset); // 0x30  possibly used for savegames?
-                scripts[type].scripts[j].action_id      = read_adv(map, offset); // 0x34  possibly used for savegames?
-                scripts[type].scripts[j].override_flags = read_adv(map, offset); // 0x38  possibly used for savegames?
-                scripts[type].scripts[j].unknown_1      = read_adv(map, offset); // 0x3C  unknown
-                scripts[type].scripts[j].how_much       = read_adv(map, offset); // 0x40  also unknown
-                scripts[type].scripts[j].unknown_2      = read_adv(map, offset); // 0x44  also unknown
+                scripts[type].scripts[j].scr_flags      = read_adv_i32(map, offset); // 0x10  (0 in maps, value in saves)
+                scripts[type].scripts[j].scr_index      = read_adv_i32(map, offset); // 0x14  Script id. Script filename is found in LST file scri
+                scripts[type].scripts[j].program_ptr    = read_adv_i32(map, offset); // 0x18  not used?
+                scripts[type].scripts[j].scr_obj_id     = (uint32_t)read_adv_i32(map, offset); // 0x1C  Object id for this script
+                scripts[type].scripts[j].lvar_offset    = read_adv_i32(map, offset); // 0x20  Offset into lvars data struct from earlier
+                scripts[type].scripts[j].lvar_cnt       = read_adv_i32(map, offset); // 0x24  (0 in maps, value in saves?)
+                scripts[type].scripts[j].last_used_val  = read_adv_i32(map, offset); // 0x28  possibly used for savegames?
+                scripts[type].scripts[j].current_action = read_adv_i32(map, offset); // 0x2C  possibly used for savegames?
+                scripts[type].scripts[j].fixed_param    = read_adv_i32(map, offset); // 0x30  possibly used for savegames?
+                scripts[type].scripts[j].action_id      = read_adv_i32(map, offset); // 0x34  possibly used for savegames?
+                scripts[type].scripts[j].override_flags = read_adv_i32(map, offset); // 0x38  possibly used for savegames?
+                scripts[type].scripts[j].unknown_1      = read_adv_i32(map, offset); // 0x3C  unknown
+                scripts[type].scripts[j].how_much       = read_adv_i32(map, offset); // 0x40  also unknown
+                scripts[type].scripts[j].unknown_2      = read_adv_i32(map, offset); // 0x44  also unknown
 
                 if ((j % 16) == 15) {
-                    this_check = read_adv(map, offset);
+                    this_check = read_adv_i32(map, offset);
                     if ((this_check != 16) && (this_check != (scr_cnt % 16))) {
                         printf("ERROR: map_map_parser.cpp: Current check value: (%d) not matching expected value (%d).\n");
                         free(scripts);
@@ -349,7 +329,7 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
                     }
                     check += this_check;
                     printf("type: %d :: total: %d :: current: %d\n", type, scr_cnt, j);
-                    int buffer_int = read_adv(map, offset);
+                    int buffer_int = read_adv_i32(map, offset);
                     if (buffer_int != 0) {
                         printf("DEBUG: Weird number found after extent script count check: %d\n", buffer_int);
                     }
@@ -382,44 +362,104 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
     uint8_t* data_ptr = &map->data[*offset];
     objects_list ol = {0};
 
-    ol.count_total = read_adv(map, offset);
+    ol.count_total = read_adv_i32(map, offset);
     ol.objects = (object*)calloc(1, sizeof(object)*ol.count_total);
     if (ol.objects == nullptr) {
         printf("ERROR: Unable to allocate memory for objects list.\n");
         return ol;
     }
 
+
+    char* temp_path = "/home/quantum/Programming/Fallout 2 Modding/fallout_map_txt_level_parser/test_maps/";
+    // DAT_file dat = load_dat_file("master", game_path);
+    DAT_file master_dat = load_dat_file("master", temp_path);
+
+
+
+    // DIR_entry* scenery_lst;
+    // scenery_lst = extract_from_DAT(
+    //     "proto\\SCENERY\\scenery.lst",
+    //     game_path,
+    //     &master_dat
+    // );
+
+    #define MAX_LST_CNT         (10)
+    LST_array pro_lst_files[MAX_LST_CNT] = {0};
+    // LST_array scenery_arr;
+    // scenery_arr = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
+    // if (scenery_arr.line == nullptr) {
+    // pro_lst_files[OBJ_SCENERY] = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
+    // if (pro_lst_files[OBJ_SCENERY].line == nullptr) {
+    //     printf("ERROR: Failed to parse .lst file into an array.\n");
+    //     return ol;
+    // }
+
+    for (int i = 0; i < MAX_LST_CNT; i++) {
+        const char* proto_names[MAX_LST_CNT] = {
+            "proto\\ITEMS\\items.lst",
+            "proto\\CRITTERS\\critters.lst",
+            "proto\\SCENERY\\scenery.lst",
+            "proto\\WALLS\\walls.lst",
+            "proto\\TILES\\tiles.lst",
+            "proto\\MISC\\misc.lst",
+
+        };
+        if (proto_names[i] == NULL) {
+            continue;
+        }
+        DIR_entry* pro_lst = NULL;
+        pro_lst = extract_from_DAT(
+            proto_names[i],
+            game_path,
+            &master_dat
+        );
+        if (pro_lst == NULL) {
+            printf("ERROR: Failed to load .lst file: %s\n", proto_names[i]);
+            continue;
+        }
+
+        pro_lst_files[i] = lst_convert((char*)pro_lst->unpacked_file.data, pro_lst->unpacked_file.size);
+        if (pro_lst_files[i].line == nullptr) {
+            printf("ERROR: Failed to parse .lst file into an array.\n");
+            return ol;
+        }
+    }
+
+
+
+
     object* obj = ol.objects;
 
     for (int elev = 0; elev < 3; elev++) {
-        ol.count_elev[elev] = read_adv(map, offset);
+        ol.count_elev[elev] = read_adv_i32(map, offset);
 
         for (int i = 0; i < ol.count_elev[elev]; i++) {
-            obj[i].obj_id          = read_adv(map, offset);     // 0x00   id	Object id.
-            obj[i].obj_tile        = read_adv(map, offset);     // 0x04   tile	Object hex tile, or -1 for objects not placed on the map.
-            obj[i].x               = read_adv(map, offset);     // 0x08   x	Pixel x offset.
-            obj[i].y               = read_adv(map, offset);     // 0x0C   y	Pixel y offset.
-            obj[i].sx              = read_adv(map, offset);     // 0x10   sx	Cached screen x.
-            obj[i].sy              = read_adv(map, offset);     // 0x14   sy	Cached screen y.
-            obj[i].frame           = read_adv(map, offset);     // 0x18   frame	Current FRM frame.
-            obj[i].rotation        = read_adv(map, offset);     // 0x1C   rotation	Rotation, 0 through 5.
-            obj[i].obj_fid         = read_adv(map, offset);     // 0x20   fid	Current art FID.
-            obj[i].obj_flags       = read_adv(map, offset);     // 0x24   flags	Instance object flags.
-            obj[i].elevation       = read_adv(map, offset);     // 0x28   elevation	Object elevation. During load the engine also forces this to the current elevation loop.
-            obj[i].obj_pid         = read_adv(map, offset);     // 0x2C   pid	Prototype PID. Use this with PRO files to enrich the object.
-            obj[i].obj_cid         = read_adv(map, offset);     // 0x30   cid	Combat id, mostly relevant to saved/in-combat state.
-            obj[i].light_radius    = read_adv(map, offset);     // 0x34   light_distance	Instance light radius.
-            obj[i].light_intensity = read_adv(map, offset);     // 0x38   light_intensity	Instance light intensity.
-            obj[i].outline_color   = read_adv(map, offset);     // 0x3C   outline	Outline color/state in saved maps. Clean map reads ignore this value.
-            obj[i].obj_sid         = read_adv(map, offset);     // 0x40   sid	Runtime script id attached to the object.
-            obj[i].obj_scr_index   = read_adv(map, offset);     // 0x44   script_index	Script index from scripts.lst, or -1.
+            obj[i].obj_id          = read_adv_i32(map, offset);     // 0x00   id	Object id. In-memory identifier unique to this object
+            obj[i].obj_tile        = read_adv_i32(map, offset);     // 0x04   tile	Object hex tile, or -1 for objects not placed on the map.
+            obj[i].x               = read_adv_i32(map, offset);     // 0x08   x	Pixel x offset.
+            obj[i].y               = read_adv_i32(map, offset);     // 0x0C   y	Pixel y offset.
+            obj[i].sx              = read_adv_i32(map, offset);     // 0x10   sx	Cached screen x.
+            obj[i].sy              = read_adv_i32(map, offset);     // 0x14   sy	Cached screen y.
+            obj[i].frame           = read_adv_i32(map, offset);     // 0x18   frame	Current FRM frame.
+            obj[i].rotation        = read_adv_i32(map, offset);     // 0x1C   rotation	Rotation, 0 through 5.
+            obj[i].obj_fid         = read_adv_i32(map, offset);     // 0x20   fid	Current art FID.
+            obj[i].obj_flags       = read_adv_i32(map, offset);     // 0x24   flags	Instance object flags.
+            obj[i].elevation       = read_adv_i32(map, offset);     // 0x28   elevation	Object elevation. During load the engine also forces this to the current elevation loop.
+            obj[i].obj_pid         = read_adv_i32(map, offset);     // 0x2C   pid	Prototype PID. Use this with PRO files to enrich the object.
+            obj[i].obj_cid         = read_adv_i32(map, offset);     // 0x30   cid	Combat id, mostly relevant to saved/in-combat state.
+            obj[i].light_radius    = read_adv_i32(map, offset);     // 0x34   light_distance	Instance light radius.
+            obj[i].light_intensity = read_adv_i32(map, offset);     // 0x38   light_intensity	Instance light intensity.
+            obj[i].outline_color   = read_adv_i32(map, offset);     // 0x3C   outline	Outline color/state in saved maps. Clean map reads ignore this value.
+            obj[i].obj_sid         = read_adv_i32(map, offset);     // 0x40   sid	Runtime script id attached to the object.
+            obj[i].obj_scr_index   = read_adv_i32(map, offset);     // 0x44   script_index	Script index from scripts.lst, or -1.
 
+            obj[i].inventory_cnt   = read_adv_i32(map, offset);     // 0x48
+            obj[i].inventory_size  = read_adv_i32(map, offset);     // 0x4C
 
-            char* temp_path = "/home/quantum/Programming/Fallout 2 Modding/fallout_map_txt_level_parser/test_maps/";
-
-            // DAT_file dat = load_dat_file("master", game_path);
-            DAT_file master_dat = load_dat_file("master", temp_path);
-            // DAT_Buffer buff;
+            if (obj[i].inventory_cnt > 0) {
+                // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
+            }
+            //QTODO: parse inventory
 
             uint8_t pid_type   = obj[i].obj_pid >> 24;
             uint32_t pid_proto = obj[i].obj_pid & 0x7FFFFF;
@@ -433,29 +473,28 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
                 break;
             case OBJ_SCENERY:
 
-                DIR_entry* scenery_lst;
-                scenery_lst = extract_from_DAT(
-                    "proto\\SCENERY\\scenery.lst",
+
+
+                char* proto_name;
+                // proto_name = scenery_arr.line[pid_proto];
+                proto_name = pro_lst_files[OBJ_SCENERY].line[pid_proto];
+                char buff[MAX_PATH];
+                snprintf(buff, MAX_PATH, "proto\\SCENERY\\%s", proto_name);
+
+                DIR_entry* pro;
+                pro = extract_from_DAT(
+                    buff,
                     game_path,
                     &master_dat
                 );
 
-                LST_array scenery_arr;
-                scenery_arr = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
-                if (scenery_arr.line == nullptr) {
-                    printf("ERROR: Failed to parse .lst file into an array.\n");
-                    return ol;
-                }
+                Proto* p;
+                p = flip_proto(pro->unpacked_file.data, pro->unpacked_file.size);
+                int extra_size;
+                // extra_size = get_obj_extra_size(p);
+                extra_size = get_obj_extra_size(p->pid, p->scenery.type);
+                *offset += extra_size;
 
-                char* proto_name;
-                proto_name = scenery_arr.line[pid_proto];
-
-                scenery scen;
-                scen = {0};
-                scen.flags      = read_adv(map, offset);
-                scen.door_flags = read_adv(map, offset);
-                // scen.destination = read_adv(map, offset);
-                // parse scenery
                 break;
             case OBJ_WALL:
                 // parse wall
@@ -487,13 +526,7 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
 
 
 
-            obj[i].inventory_cnt   = read_adv(map, offset);     // 0x48
-            obj[i].inventory_size  = read_adv(map, offset);     // 0x4C
 
-            if (obj[i].inventory_cnt > 0) {
-                // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
-            }
-            //QTODO: parse inventory
 
 
         }
@@ -558,9 +591,9 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
 
     //64mb buffer
     #define BUFF_size           (1024*1024*64)
-    DAT_buffer buff = {
-        buff.size = 0,
-        buff.data = (uint8_t*)malloc(BUFF_size),
+    DAT_buffer master_dat = {
+        master_dat.size = 0,
+        master_dat.data = (uint8_t*)malloc(BUFF_size),
     };
 
     DAT_file dat_file = load_dat_file("master", game_path);
@@ -618,9 +651,9 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
     if (!success) {
         return false;
     }
-    uint8_t* proto = buff.data;
+    uint8_t* proto = master_dat.data;
 
     free(dat_file.data);
-    free(buff.data);
+    free(master_dat.data);
     return true;
 }

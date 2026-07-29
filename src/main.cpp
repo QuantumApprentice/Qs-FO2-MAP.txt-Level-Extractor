@@ -158,6 +158,7 @@ int main(int, char**)
 
     // Main loop
     bool done = false;
+    bool renderFrame = true;    // for efficiency
 #ifdef __EMSCRIPTEN__
     // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
     // You may manually call LoadIniSettingsFromMemory() to load settings from your own storage.
@@ -173,9 +174,11 @@ int main(int, char**)
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         // [If using SDL_MAIN_USE_CALLBACKS: call ImGui_ImplSDL3_ProcessEvent() from your SDL_AppEvent() function]
+
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
+            renderFrame = true;
             ImGui_ImplSDL3_ProcessEvent(&event);
             if (event.type == SDL_EVENT_DROP_POSITION) {
                 float xm, ym;
@@ -201,15 +204,17 @@ int main(int, char**)
             }
 
 
-            if (event.type == SDL_EVENT_QUIT)
+            if (event.type == SDL_EVENT_QUIT) {
                 done = true;
+            }
             if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_ESCAPE) {
                     done = true;
                 }
             }
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
+            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window)) {
                 done = true;
+            }
         }
 
         // [If using SDL_MAIN_USE_CALLBACKS: all code below would likely be your SDL_AppIterate() function]
@@ -219,24 +224,20 @@ int main(int, char**)
             continue;
         }
 
+        if (renderFrame == false) {
+            continue;
+        }
+        renderFrame = false;
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        // if (show_demo_window)
-        //     ImGui::ShowDemoWindow(&show_demo_window);
-
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        // if (show_demo_window) { ImGui::ShowDemoWindow(&show_demo_window); }
         {
             ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
             ImGui::Begin("MAP.txt GUI", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
-            // if (ImGui::Button("Demo Window")) {
-            //     show_demo_window = !show_demo_window;
-            // }
-
+            // if (ImGui::Button("Demo Window")) { show_demo_window = !show_demo_window; }
             // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
             map_txt_gui();
