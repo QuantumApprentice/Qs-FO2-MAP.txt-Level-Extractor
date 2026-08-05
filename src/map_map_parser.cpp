@@ -120,6 +120,7 @@ struct object
     int32_t inventory_size;   // 0x4C  Allocated inventory capacity in the saved object data
     object* inv_ptr;          // 0x50  Serialized pointer placeholder from the original engine (savegames?)
     // inventory inv;            // 0x50  Serialized pointer placeholder from the original engine
+    uint32_t inst_flags;      // 0x54  All non-critter objects store an additional instance flags field at 0x54 (all critter ones too?)
 };
 
 struct objects_list
@@ -357,6 +358,68 @@ scripts_list* parse_map_scripts(map_lvls* map, int* offset)
     return scripts;
 }
 
+// Loop through an array of .lst file lines to load all associated protos
+// If a match is found for the current pid_proto being searched for,
+// then break after extracting and flipping that proto,
+// then return a pointer to it.
+Proto* load_protos(DAT_file* master_dat, LST_array* pro_lst_files, const char* type_str, int pid_proto)
+{
+    Proto* p     = nullptr;
+    int pro_type = pid_proto >> 24;
+    if (master_dat == nullptr) {
+        printf("ERROR: Missing dat file\n");
+        return nullptr;
+    }
+    if (pro_lst_files[pro_type].line == nullptr) {
+        printf("ERROR: Missing lst file\n");
+        return nullptr;
+    }
+    char buff[MAX_PATH];
+    for (int i = 0; i < pro_lst_files[pro_type].count; i++) {
+        char* proto_name = pro_lst_files[pro_type].line[i];
+        snprintf(buff, MAX_PATH, "proto\\%s\\%s", type_str, proto_name);
+
+        DIR_entry* pro = extract_from_DAT(
+            buff,
+            master_dat
+        );
+
+        if (pro == nullptr) {
+            printf("ERROR: Missing Proto! %s\n", proto_name);
+            continue;
+        }
+
+        p = flip_proto(pro->unpacked_file.data, pro->unpacked_file.size, &pro->unpacked_file.flipped);
+
+        if (p->pid == pid_proto) {
+            return p;
+        }
+    }
+
+    printf("ERROR: No proto matching provided pid found: %08d in %s\n", pid_proto, type_str);
+    return nullptr;
+}
+
+int get_obj_offset_from_proto(LST_array* pro_lst_files, int pro_type, uint32_t pid_proto, DAT_file* master_dat)
+{
+    const char* types[] = {
+        "ITEMS"   ,
+        "CRITTERS",
+        "SCENERY" ,
+        "WALLS"   ,
+        "TILES"   ,
+        "MISC"    ,
+        "INTRFACE",
+        "INVEN"   ,
+        "HEAD"    ,
+        "BG"
+    };
+
+    Proto* p = load_protos(master_dat, pro_lst_files, types[pro_type], pid_proto);
+    int offset = get_obj_extra_size(p);
+    return offset;
+}
+
 objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
 {
     uint8_t* data_ptr = &map->data[*offset];
@@ -369,31 +432,13 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
         return ol;
     }
 
-
+    //TODO: swap this back when done debugging
+    // DAT_file master_dat = load_dat_file("master", game_path);
     char* temp_path = "/home/quantum/Programming/Fallout 2 Modding/fallout_map_txt_level_parser/test_maps/";
-    // DAT_file dat = load_dat_file("master", game_path);
     DAT_file master_dat = load_dat_file("master", temp_path);
-
-
-
-    // DIR_entry* scenery_lst;
-    // scenery_lst = extract_from_DAT(
-    //     "proto\\SCENERY\\scenery.lst",
-    //     game_path,
-    //     &master_dat
-    // );
 
     #define MAX_LST_CNT         (10)
     LST_array pro_lst_files[MAX_LST_CNT] = {0};
-    // LST_array scenery_arr;
-    // scenery_arr = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
-    // if (scenery_arr.line == nullptr) {
-    // pro_lst_files[OBJ_SCENERY] = lst_convert((char*)scenery_lst->unpacked_file.data, scenery_lst->unpacked_file.size);
-    // if (pro_lst_files[OBJ_SCENERY].line == nullptr) {
-    //     printf("ERROR: Failed to parse .lst file into an array.\n");
-    //     return ol;
-    // }
-
     for (int i = 0; i < MAX_LST_CNT; i++) {
         const char* proto_names[MAX_LST_CNT] = {
             "proto\\ITEMS\\items.lst",
@@ -402,7 +447,6 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
             "proto\\WALLS\\walls.lst",
             "proto\\TILES\\tiles.lst",
             "proto\\MISC\\misc.lst",
-
         };
         if (proto_names[i] == NULL) {
             continue;
@@ -410,7 +454,6 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
         DIR_entry* pro_lst = NULL;
         pro_lst = extract_from_DAT(
             proto_names[i],
-            game_path,
             &master_dat
         );
         if (pro_lst == NULL) {
@@ -455,85 +498,22 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
 
             obj[i].inventory_cnt   = read_adv_i32(map, offset);     // 0x48
             obj[i].inventory_size  = read_adv_i32(map, offset);     // 0x4C
+            obj[i].inv_ptr         = (object*)read_adv_i32(map, offset);
 
+            //QTODO: parse inventory
             if (obj[i].inventory_cnt > 0) {
                 // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
-            }
-            //QTODO: parse inventory
-
-            uint8_t pid_type   = obj[i].obj_pid >> 24;
-            uint32_t pid_proto = obj[i].obj_pid & 0x7FFFFF;
-            switch (pid_type)
-            {
-            case OBJ_ITEM:
-                // parse item
-                break;
-            case OBJ_CRITTER:
-                // parse critter
-                break;
-            case OBJ_SCENERY:
-
-
-
-                char* proto_name;
-                // proto_name = scenery_arr.line[pid_proto];
-                proto_name = pro_lst_files[OBJ_SCENERY].line[pid_proto];
-                char buff[MAX_PATH];
-                snprintf(buff, MAX_PATH, "proto\\SCENERY\\%s", proto_name);
-
-                DIR_entry* pro;
-                pro = extract_from_DAT(
-                    buff,
-                    game_path,
-                    &master_dat
-                );
-
-                Proto* p;
-                p = flip_proto(pro->unpacked_file.data, pro->unpacked_file.size);
-                int extra_size;
-                // extra_size = get_obj_extra_size(p);
-                extra_size = get_obj_extra_size(p->pid, p->scenery.type);
-                *offset += extra_size;
-
-                break;
-            case OBJ_WALL:
-                // parse wall
-                break;
-            case OBJ_TILE:
-                // parse tile
-                break;
-            case OBJ_MISC:
-                // parse misc
-                break;
-            case OBJ_INTRFACE:
-                // parse interface
-                break;
-            case OBJ_INVEN:
-                // parse inventory
-                break;
-            case OBJ_HEAD:
-                // parse head?
-                break;
-            case OBJ_BG:
-                // parse background
-                break;
-            
-            default:
-                printf("ERROR: Object type not recognized.");
-                break;
+                printf("well shit, guess its time to parse inventory\n");
             }
 
+            obj[i].inst_flags  = read_adv_i32(map, offset);
 
-
-
-
-
-
+            uint8_t  pid_type  = obj[i].obj_pid >> 24;
+            int sz = 0;
+            sz = get_obj_offset_from_proto(pro_lst_files, pid_type, obj[i].obj_pid, &master_dat);
+            *offset += sz;
         }
-        
-
     }
-
 
     return ol;
 }
@@ -592,6 +572,7 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
     //64mb buffer
     #define BUFF_size           (1024*1024*64)
     DAT_buffer master_dat = {
+        master_dat.flipped = true,
         master_dat.size = 0,
         master_dat.data = (uint8_t*)malloc(BUFF_size),
     };
@@ -647,7 +628,7 @@ bool get_DAT_Proto(char* game_path, char* file_path, int pid)//, user_info* usr_
     }
 
     snprintf(path_buff, MAX_PATH, "proto\\%s\\%s.LST", game_path, type, type);
-    success = extract_from_DAT(path_buff, game_path, &dat_file);//, &buff);
+    success = extract_from_DAT(path_buff, &dat_file);
     if (!success) {
         return false;
     }
