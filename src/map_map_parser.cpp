@@ -118,9 +118,11 @@ struct object
 
     int32_t inventory_cnt;    // 0x48  Number of inventory entries owned by this object
     int32_t inventory_size;   // 0x4C  Allocated inventory capacity in the saved object data
-    object* inv_ptr;          // 0x50  Serialized pointer placeholder from the original engine (savegames?)
-    // inventory inv;            // 0x50  Serialized pointer placeholder from the original engine
+    uint32_t inv;             // 0x50  Serialized pointer placeholder from the original engine
     uint32_t inst_flags;      // 0x54  All non-critter objects store an additional instance flags field at 0x54 (all critter ones too?)
+
+    int32_t item_count = 0;   // not part of the object as far as I can tell, but definitely part of items when reading inventory from .map files
+    object* inv_ptr;          // Used to allocate memory to store inventory object information when reading from .map file
 };
 
 struct objects_list
@@ -420,6 +422,41 @@ int get_obj_offset_from_proto(LST_array* pro_lst_files, int pro_type, uint32_t p
     return offset;
 }
 
+int read_obj(object* obj, map_lvls* map, int* offset, LST_array* pro_lst_files, DAT_file* master_dat)
+{
+    obj->obj_id          = read_adv_i32(map, offset);     // 0x00   id        Object id. In-memory identifier unique to this object
+    obj->obj_tile        = read_adv_i32(map, offset);     // 0x04   tile      Object hex tile, or -1 for objects not placed on the map.
+    obj->x               = read_adv_i32(map, offset);     // 0x08   x         Pixel x offset.
+    obj->y               = read_adv_i32(map, offset);     // 0x0C   y         Pixel y offset.
+    obj->sx              = read_adv_i32(map, offset);     // 0x10   sx        Cached screen x.
+    obj->sy              = read_adv_i32(map, offset);     // 0x14   sy        Cached screen y.
+    obj->frame           = read_adv_i32(map, offset);     // 0x18   frame     Current FRM frame.
+    obj->rotation        = read_adv_i32(map, offset);     // 0x1C   rotation  Rotation, 0 through 5.
+    obj->obj_fid         = read_adv_i32(map, offset);     // 0x20   fid       Current art FID.
+    obj->obj_flags       = read_adv_i32(map, offset);     // 0x24   flags     Instance object flags.
+    obj->elevation       = read_adv_i32(map, offset);     // 0x28   elevation Object elevation. During load the engine also forces this to the current elevation loop.
+    obj->obj_pid         = read_adv_i32(map, offset);     // 0x2C   pid       Prototype PID. Use this with PRO files to enrich the object.
+    obj->obj_cid         = read_adv_i32(map, offset);     // 0x30   cid       Combat id, mostly relevant to saved/in-combat state.
+    obj->light_radius    = read_adv_i32(map, offset);     // 0x34   light_distance    Instance light radius.
+    obj->light_intensity = read_adv_i32(map, offset);     // 0x38   light_intensity   Instance light intensity.
+    obj->outline_color   = read_adv_i32(map, offset);     // 0x3C   outline   Outline color/state in saved maps. Clean map reads ignore this value.
+    obj->obj_sid         = read_adv_i32(map, offset);     // 0x40   sid       Runtime script id attached to the object.
+    obj->obj_scr_index   = read_adv_i32(map, offset);     // 0x44   script_index      Script index from scripts.lst, or -1.
+
+    obj->inventory_cnt   = read_adv_i32(map, offset);     // 0x48
+    obj->inventory_size  = read_adv_i32(map, offset);     // 0x4C
+    obj->inv             = read_adv_i32(map, offset);     // 0x50   TODO: not sure what address this stores, might need to overwrite?
+
+    obj->inst_flags      = read_adv_i32(map, offset);     // 0x54   all objects have flags, for some reason the game engine reads this separately between critters and all other types
+
+    uint8_t  pid_type  = obj->obj_pid >> 24;
+    int sz = 0;
+    sz = get_obj_offset_from_proto(pro_lst_files, pid_type, obj->obj_pid, master_dat);
+    *offset += sz;
+
+    return 0;
+}
+
 objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
 {
     uint8_t* data_ptr = &map->data[*offset];
@@ -477,41 +514,26 @@ objects_list parse_map_objects(map_lvls* map, int* offset, char* game_path)
         ol.count_elev[elev] = read_adv_i32(map, offset);
 
         for (int i = 0; i < ol.count_elev[elev]; i++) {
-            obj[i].obj_id          = read_adv_i32(map, offset);     // 0x00   id	Object id. In-memory identifier unique to this object
-            obj[i].obj_tile        = read_adv_i32(map, offset);     // 0x04   tile	Object hex tile, or -1 for objects not placed on the map.
-            obj[i].x               = read_adv_i32(map, offset);     // 0x08   x	Pixel x offset.
-            obj[i].y               = read_adv_i32(map, offset);     // 0x0C   y	Pixel y offset.
-            obj[i].sx              = read_adv_i32(map, offset);     // 0x10   sx	Cached screen x.
-            obj[i].sy              = read_adv_i32(map, offset);     // 0x14   sy	Cached screen y.
-            obj[i].frame           = read_adv_i32(map, offset);     // 0x18   frame	Current FRM frame.
-            obj[i].rotation        = read_adv_i32(map, offset);     // 0x1C   rotation	Rotation, 0 through 5.
-            obj[i].obj_fid         = read_adv_i32(map, offset);     // 0x20   fid	Current art FID.
-            obj[i].obj_flags       = read_adv_i32(map, offset);     // 0x24   flags	Instance object flags.
-            obj[i].elevation       = read_adv_i32(map, offset);     // 0x28   elevation	Object elevation. During load the engine also forces this to the current elevation loop.
-            obj[i].obj_pid         = read_adv_i32(map, offset);     // 0x2C   pid	Prototype PID. Use this with PRO files to enrich the object.
-            obj[i].obj_cid         = read_adv_i32(map, offset);     // 0x30   cid	Combat id, mostly relevant to saved/in-combat state.
-            obj[i].light_radius    = read_adv_i32(map, offset);     // 0x34   light_distance	Instance light radius.
-            obj[i].light_intensity = read_adv_i32(map, offset);     // 0x38   light_intensity	Instance light intensity.
-            obj[i].outline_color   = read_adv_i32(map, offset);     // 0x3C   outline	Outline color/state in saved maps. Clean map reads ignore this value.
-            obj[i].obj_sid         = read_adv_i32(map, offset);     // 0x40   sid	Runtime script id attached to the object.
-            obj[i].obj_scr_index   = read_adv_i32(map, offset);     // 0x44   script_index	Script index from scripts.lst, or -1.
-
-            obj[i].inventory_cnt   = read_adv_i32(map, offset);     // 0x48
-            obj[i].inventory_size  = read_adv_i32(map, offset);     // 0x4C
-            obj[i].inv_ptr         = (object*)read_adv_i32(map, offset);
+            read_obj(&obj[i], map, offset, pro_lst_files, &master_dat);
 
             //QTODO: parse inventory
             if (obj[i].inventory_cnt > 0) {
-                // obj[i].inv.inv_ptr = (object*)malloc(obj[i].inventory_size);
+                obj[i].inv_ptr = (object*)malloc(obj[i].inventory_size);
+                int count   = obj[i].inventory_cnt;
+                object* inv = obj[i].inv_ptr;
+                for (int j = 0; j < count; j++) {
+                    inv[j].item_count = read_adv_i32(map, offset);
+                    read_obj(&inv[j], map, offset, pro_lst_files, &master_dat);
+                }
+
+                // #define F (100)
+                // int wtf[F] = {0};
+                // for (int i  = 0; i < F; i++) {
+                //     wtf[i]  = read_adv_i32(map, offset);
+                // }
+
                 printf("well shit, guess its time to parse inventory\n");
             }
-
-            obj[i].inst_flags  = read_adv_i32(map, offset);
-
-            uint8_t  pid_type  = obj[i].obj_pid >> 24;
-            int sz = 0;
-            sz = get_obj_offset_from_proto(pro_lst_files, pid_type, obj[i].obj_pid, &master_dat);
-            *offset += sz;
         }
     }
 
